@@ -1,0 +1,94 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+
+:root{
+  /* ===== PALETA ROXO INSTITUCIONAL ===== */
+  --bg: #F5F2FB;         /* fundo geral suave */
+  --surface: #FFFFFF;    /* cards, painéis */
+  --surface-2: #EFE7FF;  /* abas não selecionadas */
+
+  --primary: #6A0DAD;    /* roxo institucional */
+  --primary-2: #7B2CBF;  /* hover */
+  --primary-3: #4B0082;  /* roxo profundo */
+
+  --text: #1F1B2E;
+  --muted: #6C6A7A;
+
+  --border: #E0D7F7;
+  --shadow: 0 8px 24px rgba(106, 13, 173, 0.10);
+
+  --radius: 14px;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Roboto", system-ui, sans-serif;
+}
+
+/* Cards e painéis */
+div[style*="borderRadius"] {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow) !important;
+  border-radius: var(--radius) !important;
+}
+
+/* Sidebar */
+#_dash-app-content > div > div:nth-child(2) > div:nth-child(1) {
+  background: var(--surface);
+}
+
+/* Botões */
+button {
+  background: var(--primary);
+  color: white;
+  border-radius: 12px;
+  border: none;
+  padding: 10px 12px;
+  font-weight: 500;
+}
+button:hover {
+  background: var(--primary-2);
+}
+
+/* Tabs */
+.tab {
+  background: var(--surface-2) !important;
+  border: 1px solid var(--border) !important;
+  border-bottom: none !important;
+  font-weight: 500;
+}
+
+.tab--selected {
+  background: var(--surface) !important;
+  color: var(--primary-3) !important;
+  border-color: var(--border) !important;
+}
+
+.tab-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0 12px 12px 12px;
+}
+
+/* Tabelas */
+.dash-table-container {
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+
+.dash-header {
+  background: var(--surface-2) !important;
+  color: var(--primary-3) !important;
+  font-weight: 600 !important;
+}
+
+/* Links */
+a {
+  color: var(--primary);
+  font-weight: 500;
+}
+a:hover {
+  color: var(--primary-3);
+}
