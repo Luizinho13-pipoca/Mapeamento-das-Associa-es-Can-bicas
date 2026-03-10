@@ -376,6 +376,7 @@ BRAZIL_STATES_GEOJSON = requests.get(BRAZIL_STATES_GEOJSON_URL, timeout=30).json
 # APP
 # =========================================================
 app = Dash(__name__)
+server = app.server
 app.title = "Dashboard — Associações (modelo tipo Ipea)"
 
 uf_opts = uniq_sorted(df[COL_UF]) if COL_UF in df.columns else []
@@ -831,4 +832,6 @@ def download_csv(_, table_data):
 
 
 if __name__ == "__main__":
+    app.run(debug=True, use_reloader=False)
+
     app.run(debug=True, use_reloader=False)
