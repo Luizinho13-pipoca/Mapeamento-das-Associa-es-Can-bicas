@@ -18,7 +18,7 @@ import plotly.graph_objects as go
 # - link Google Drive "view"
 # - link direto de download
 # - Google Sheets CSV publicado
-DATA_SOURCE = "mapeamento_asso.csv"
+DATA_SOURCE = "https://docs.google.com/spreadsheets/d/153B_LsL0PjZZ56GlT7WSD38Zo4zIOXTv/edit?usp=drivesdk&ouid=116222672595798367643&rtpof=true&sd=true"
 
 # link do formulário
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdZJ3ARpU9ej_xyanT2wfWyotBC_WMY_jsZhRgRRXmzuLylew/viewform"
@@ -835,3 +835,4 @@ if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
 
     app.run(debug=True, use_reloader=False)
+
