@@ -18,7 +18,7 @@ import plotly.graph_objects as go
 # - link Google Drive "view"
 # - link direto de download
 # - Google Sheets CSV publicado
-DATA_SOURCE = "https://docs.google.com/spreadsheets/d/1BQvUkVC9hAQIWgVHV42_JsQwlSVhrGYe/export?format=xlsx"
+DATA_SOURCE = "Mape Associações.xlsx"
 
 # link do formulário
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdZJ3ARpU9ej_xyanT2wfWyotBC_WMY_jsZhRgRRXmzuLylew/viewform"
