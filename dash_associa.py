@@ -1144,5 +1144,8 @@ def download_csv(_, table_data):
     return dcc.send_data_frame(dld.to_csv, "associacoes_filtradas.csv", index=False)
 
 
+app = Dash(__name__)
+server = app.server
+
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
