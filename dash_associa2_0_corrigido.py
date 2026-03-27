@@ -567,13 +567,17 @@ app.layout = html.Div([
         html.Div([
             html.Div([
                 html.H1("Associações Cannábicas — Painel", className="brand-title"),
-                html.P("Fontes: dados Psicocult, Fiocruz e INCT-InEAC", className="brand-subtitle")
+                html.P("Fontes: dados Psicocult INCT-InEAC e Fiocruz", className="brand-subtitle")
             ], className="brand-text"),
+
             html.Div([
-                html.Img(src="/assets/logo_psicocult.png", className="brand-logo psicocult-logo"),
                 html.Img(src="/assets/marcafiocruz_horizontal_POSITIVA_24052024-scaled-1.jpg", className="brand-logo fiocruz-logo"),
-                html.Img(src="/assets/unnamed.jpg", className="brand-logo inct-logo"),
+                html.Img(src="/assets/IMG-20260325-WA0044.jpg", className="brand-logo"),
+                html.Img(src="/assets/logo_psicocult.png", className="brand-logo psicocult-logo"),
+                html.Img(src="/assets/IMG-20260325-WA0043.jpg", className="brand-logo"),
+                html.Img(src="/assets/-5c054bfc7b132.jpg", className="brand-logo"),
             ], className="brand-logos")
+
         ], className="app-header-inner", style={
             "display": "flex",
             "justifyContent": "space-between",
