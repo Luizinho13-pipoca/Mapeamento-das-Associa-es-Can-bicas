@@ -1,0 +1,264 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;800&display=swap');
+
+:root{
+  --bg: #F6F2FF;
+  --surface: #FFFFFF;
+  --surface-2: #F2EBFF;
+  --surface-3: #FBF9FF;
+
+  --primary: #5B21B6;
+  --primary-2: #6D28D9;
+  --primary-3: #3B0764;
+  --primary-soft: #E9DFFF;
+  --primary-soft-2: #D8C9FB;
+
+  --text: #1F1B2E;
+  --muted: #6C6A7A;
+  --border: #DCCFFC;
+  --shadow: 0 10px 28px rgba(91, 33, 182, 0.12);
+  --radius: 16px;
+}
+
+html, body {
+  background: linear-gradient(180deg, #F8F5FF 0%, #F3EDFF 100%);
+  color: var(--text);
+  font-family: "Roboto", system-ui, sans-serif;
+}
+
+#_dash-app-content {
+  background: transparent;
+}
+
+.app-header {
+  padding: 16px 20px;
+  background: linear-gradient(90deg, #F7F2FF 0%, #EEE5FF 100%);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 6px 18px rgba(91, 33, 182, 0.06);
+}
+
+.app-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  flex-wrap: wrap;
+}
+
+.brand-title {
+  margin: 0;
+  color: var(--primary-3);
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 250px;
+  max-width: 520px;
+}
+
+.brand-logos {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  flex: 1 1 520px;
+}
+
+.brand-logo {
+  height: 52px;
+  max-width: 180px;
+  object-fit: contain;
+  background: rgba(255,255,255,0.78);
+  border: 1px solid rgba(91, 33, 182, 0.10);
+  border-radius: 12px;
+  padding: 6px 10px;
+  box-shadow: 0 4px 12px rgba(91, 33, 182, 0.06);
+  display: block;
+}
+
+/* Destaques institucionais */
+.fiocruz-logo {
+  height: 50px;
+  max-width: 220px;
+}
+
+.psicocult-logo {
+  height: 58px;
+  max-width: 140px;
+}
+
+.inct-logo {
+  height: 52px;
+  max-width: 160px;
+}
+
+.brand-title {
+  margin: 0;
+  color: var(--primary-3);
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.brand-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* Cards e painéis */
+div[style*="borderRadius"] {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow) !important;
+  border-radius: var(--radius) !important;
+}
+
+.map-panel {
+  background: #D8D8D8 !important;
+  border: 1px solid var(--primary-soft-2) !important;
+  box-shadow: 0 10px 24px rgba(91, 33, 182, 0.10) !important;
+}
+
+/* Sidebar */
+#_dash-app-content > div > div:nth-child(2) > div:nth-child(1) {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FBF9FF 100%);
+}
+
+h4, h5 {
+  color: var(--primary-3);
+}
+
+label {
+  color: var(--primary-3);
+  font-weight: 600;
+}
+
+/* Botões */
+button {
+  background: linear-gradient(90deg, var(--primary) 0%, var(--primary-2) 100%);
+  color: white;
+  border-radius: 12px;
+  border: none;
+  padding: 10px 12px;
+  font-weight: 600;
+  box-shadow: 0 6px 14px rgba(91, 33, 182, 0.18);
+}
+button:hover {
+  filter: brightness(1.03);
+}
+
+/* Tabs */
+.tab {
+  background: var(--surface-2) !important;
+  border: 1px solid var(--border) !important;
+  border-bottom: none !important;
+  font-weight: 600;
+  color: var(--primary) !important;
+}
+
+.tab--selected {
+  background: linear-gradient(180deg, #FFFFFF 0%, #F6F0FF 100%) !important;
+  color: var(--primary-3) !important;
+  border-color: var(--primary-soft-2) !important;
+  box-shadow: inset 0 3px 0 var(--primary);
+}
+
+.tab-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0 12px 12px 12px;
+}
+
+/* Dropdowns */
+.Select-control, .Select-menu-outer, .VirtualizedSelectOption {
+  border-color: var(--border) !important;
+}
+
+.Select--multi .Select-value {
+  background-color: var(--primary-soft) !important;
+  border-color: var(--primary-soft-2) !important;
+  color: var(--primary-3) !important;
+}
+
+/* Tabelas */
+.dash-table-container {
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.dash-header {
+  background: linear-gradient(180deg, #F4EEFF 0%, #EDE4FF 100%) !important;
+  color: var(--primary-3) !important;
+  font-weight: 700 !important;
+}
+
+/* Links */
+a {
+  color: var(--primary);
+  font-weight: 600;
+}
+a:hover {
+  color: var(--primary-3);
+}
+
+/* RESPONSIVO */
+@media (max-width: 1200px) {
+  .brand-logos {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-header {
+    padding: 14px 16px;
+  }
+
+  .app-header-inner {
+    align-items: flex-start;
+    gap: 18px;
+  }
+
+  .brand-text {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .brand-logos {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  .brand-logo {
+    height: 42px;
+    max-width: 150px;
+  }
+
+  .fiocruz-logo {
+    height: 40px;
+    max-width: 180px;
+  }
+
+  .psicocult-logo {
+    height: 46px;
+  }
+}
+
+@media (max-width: 600px) {
+  .brand-title {
+    font-size: 24px;
+  }
+
+  .brand-logo {
+    height: 36px;
+    max-width: 130px;
+  }
+}
