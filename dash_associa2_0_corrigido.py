@@ -18,27 +18,57 @@ import plotly.graph_objects as go
 # - link Google Drive "view"
 # - link direto de download
 # - Google Sheets CSV publicado
-DATA_SOURCE = "https://docs.google.com/spreadsheets/d/1BQvUkVC9hAQIWgVHV42_JsQwlSVhrGYe/export?format=csv"
+DATA_SOURCE = "https://docs.google.com/spreadsheets/d/1BQvUkVC9hAQIWgVHV42_JsQwlSVhrGYe/export?format=xlsx"
 
 # link do formulário
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdZJ3ARpU9ej_xyanT2wfWyotBC_WMY_jsZhRgRRXmzuLylew/viewform"
 
 # paleta roxa institucional
+PALETTE = [
+    "#DEC9E9",
+    "#DAC3E8",
+    "#D2B7E5",
+    "#C19EE0",
+    "#B185DB",
+    "#A06CD5",
+    "#9163CB",
+    "#815AC0",
+    "#7251B5",
+    "#6247AA",
+]
+
+DONUT_PALETTE = [
+    "#6247AA",
+    "#7251B5",
+    "#815AC0",
+    "#9163CB",
+    "#A06CD5",
+    "#B185DB",
+    "#C19EE0",
+    "#D2B7E5",
+]
+
+MAP_BG = "#D3D3D3"
+
 PURPLE_SCALE = [
-    [0.0,  "#F3EEFF"],
-    [0.2,  "#DDD0FF"],
-    [0.4,  "#C2ACFF"],
-    [0.6,  "#9B77F2"],
-    [0.8,  "#7C4DDB"],
-    [1.0,  "#5B21B6"],
+    [0.00, "#DEC9E9"],
+    [0.12, "#DAC3E8"],
+    [0.25, "#D2B7E5"],
+    [0.38, "#C19EE0"],
+    [0.50, "#B185DB"],
+    [0.62, "#A06CD5"],
+    [0.75, "#9163CB"],
+    [0.88, "#815AC0"],
+    [0.94, "#7251B5"],
+    [1.00, "#6247AA"],
 ]
 
 
 # =========================================================
 # HELPERS VISUAIS
 # =========================================================
-def apply_plot_theme(fig, title_color="#3B0764", text_color="#1F1B2E",
-                     paper_bg="#FBF9FF", plot_bg="#FBF9FF"):
+def apply_plot_theme(fig, title_color="#6247AA", text_color="#2B193D",
+                     paper_bg="#F8F4FB", plot_bg="#F8F4FB"):
     fig.update_layout(
         font={"family": "Arial, Roboto, sans-serif", "color": text_color},
         title={
@@ -63,21 +93,22 @@ def blank_fig(msg: str):
         title=msg,
         xaxis={"visible": False},
         yaxis={"visible": False},
-        paper_bgcolor="#D3D3D3",
-        plot_bgcolor="#D3D3D3",
+        paper_bgcolor=MAP_BG,
+        plot_bgcolor=MAP_BG,
         annotations=[{
             "text": msg,
             "xref": "paper",
             "yref": "paper",
             "showarrow": False,
-            "font": {"size": 14, "color": "#1F1B2E"}
+            "font": {"size": 14, "color": "#2B193D"}
         }]
     )
     return fig
 
 
 
-def apply_map_background(fig, geo_bg="#D3D3D3"):
+
+def apply_map_background(fig, geo_bg=MAP_BG):
     fig.update_geos(
         showland=True,
         landcolor="#F7F4FC",
@@ -89,7 +120,7 @@ def apply_map_background(fig, geo_bg="#D3D3D3"):
         showcoastlines=False,
         showframe=False,
         bgcolor=geo_bg,
-        subunitcolor="rgba(91,33,182,0.42)",
+        subunitcolor="rgba(98,71,170,0.42)",
         subunitwidth=1.2,
     )
     fig.update_layout(
@@ -98,7 +129,7 @@ def apply_map_background(fig, geo_bg="#D3D3D3"):
         plot_bgcolor=geo_bg,
         hoverlabel={
             "bgcolor": "white",
-            "font": {"color": "#1F1B2E"}
+            "font": {"color": "#2B193D"}
         },
         coloraxis_colorbar={
             "title": "Nº de associações",
@@ -107,7 +138,6 @@ def apply_map_background(fig, geo_bg="#D3D3D3"):
         }
     )
     return fig
-
 
 # =========================================================
 # HELPERS GERAIS
@@ -147,85 +177,31 @@ def is_url(path_or_url: str) -> bool:
     )
 
 
-def _try_read_excel(content: bytes) -> pd.DataFrame | None:
-    try:
-        return pd.read_excel(io.BytesIO(content))
-    except Exception:
-        return None
-
-
-def _try_read_csv_bytes(content: bytes, sep: str, encoding: str) -> pd.DataFrame | None:
-    try:
-        df = pd.read_csv(
-            io.BytesIO(content),
-            sep=sep,
-            encoding=encoding,
-            engine="python",
-            on_bad_lines="skip"
-        )
-        if df is not None and (df.shape[1] > 1 or len(df) > 0):
-            return df
-    except Exception:
-        return None
-    return None
-
-
-def _try_read_csv_path(path: Path, sep: str, encoding: str) -> pd.DataFrame | None:
-    try:
-        df = pd.read_csv(
-            path,
-            sep=sep,
-            encoding=encoding,
-            engine="python",
-            on_bad_lines="skip"
-        )
-        if df is not None and (df.shape[1] > 1 or len(df) > 0):
-            return df
-    except Exception:
-        return None
-    return None
-
-
 def read_bytes_as_table(content: bytes, source_name: str = "") -> pd.DataFrame:
     lower_name = source_name.lower()
 
-    # Se a origem indica Excel, tenta Excel primeiro.
-    if lower_name.endswith((".xlsx", ".xls", "format=xlsx", "format=xls")):
-        df_excel = _try_read_excel(content)
-        if df_excel is not None:
-            return df_excel
-
-    # Mesmo sem extensão confiável, ainda tenta Excel antes de CSV.
-    df_excel = _try_read_excel(content)
-    if df_excel is not None:
-        return df_excel
-
-    # CSV com combinações robustas de encoding e separador.
-    encodings = ["utf-8", "utf-8-sig", "latin1", "cp1252", "iso-8859-1"]
-    seps = [",", ";", "\t", "|"]
-
-    for encoding in encodings:
-        for sep in seps:
-            df_csv = _try_read_csv_bytes(content, sep=sep, encoding=encoding)
-            if df_csv is not None:
-                return df_csv
-
-    # Último fallback: decodifica ignorando caracteres inválidos.
-    text = content.decode("latin1", errors="replace")
-    for sep in seps:
+    # tenta Excel primeiro
+    if lower_name.endswith(".xlsx") or lower_name.endswith(".xls"):
         try:
-            df = pd.read_csv(
-                io.StringIO(text),
-                sep=sep,
-                engine="python",
-                on_bad_lines="skip"
-            )
-            if df.shape[1] > 1 or len(df) > 0:
+            return pd.read_excel(io.BytesIO(content))
+        except Exception:
+            pass
+
+    try:
+        return pd.read_excel(io.BytesIO(content))
+    except Exception:
+        pass
+
+    # tenta CSV com vários separadores
+    for sep in [",", ";", "\t", "|"]:
+        try:
+            df = pd.read_csv(io.BytesIO(content), sep=sep)
+            if df.shape[1] > 1:
                 return df
         except Exception:
             pass
 
-    raise ValueError(f"Não foi possível ler a fonte de dados: {source_name}")
+    return pd.read_csv(io.BytesIO(content), engine="python", on_bad_lines="skip")
 
 
 def load_table(source: str) -> pd.DataFrame:
@@ -246,13 +222,14 @@ def load_table(source: str) -> pd.DataFrame:
         return pd.read_excel(path)
 
     if suffix == ".csv":
-        encodings = ["utf-8", "utf-8-sig", "latin1", "cp1252", "iso-8859-1"]
-        seps = [",", ";", "\t", "|"]
-        for encoding in encodings:
-            for sep in seps:
-                df = _try_read_csv_path(path, sep=sep, encoding=encoding)
-                if df is not None:
+        for sep in [",", ";", "\t", "|"]:
+            try:
+                df = pd.read_csv(path, sep=sep)
+                if df.shape[1] > 1:
                     return df
+            except Exception:
+                pass
+        return pd.read_csv(path, engine="python", on_bad_lines="skip")
 
     with open(path, "rb") as f:
         return read_bytes_as_table(f.read(), str(path))
@@ -287,7 +264,6 @@ def is_found_link(x):
     if "não encontrado" in s or "nao encontrado" in s:
         return False
     return s.startswith("http")
-
 
 def is_checked_service_value(x):
     if pd.isna(x):
@@ -339,16 +315,18 @@ def make_donut_from_counts(counts_df: pd.DataFrame, names_col: str, values_col: 
         values=values_col,
         hole=0.58,
         title=title,
-        color_discrete_sequence=["#5B21B6", "#6D28D9", "#7C3AED", "#8B5CF6", "#C4B5FD", "#DDD6FE"],
+        color_discrete_sequence=DONUT_PALETTE,
     )
     fig.update_traces(
         textposition="inside",
         textinfo="percent+label",
+        textfont={"color": "white", "size": 13},
+        marker={"line": {"color": "#FBF9FF", "width": 2}},
         hovertemplate="%{label}: %{value}<extra></extra>"
     )
     fig.update_layout(
-        paper_bgcolor="#FBF9FF",
-        plot_bgcolor="#FBF9FF",
+        paper_bgcolor="#F8F4FB",
+        plot_bgcolor="#F8F4FB",
         legend_title_text="",
         margin={"l": 10, "r": 10, "t": 60, "b": 10},
     )
@@ -550,7 +528,7 @@ BRAZIL_STATES_GEOJSON = requests.get(BRAZIL_STATES_GEOJSON_URL, timeout=30).json
 # APP
 # =========================================================
 app = Dash(__name__)
-app.title = "Dashboard — Associações (modelo tipo Ipea)"
+app.title = "Dashboard — Associações Cannabicas"
 
 uf_opts = uniq_sorted(df[COL_UF]) if COL_UF in df.columns else []
 mun_opts = uniq_sorted(df[COL_MUN]) if COL_MUN in df.columns else []
@@ -565,8 +543,9 @@ app.layout = html.Div([
 
     html.Div([
         html.Div([
+
             html.Div([
-                html.H1("Associações Cannábicas — Painel", className="brand-title"),
+                html.H1("Associações Cannábicas — Mapannabis", className="brand-title"),
                 html.P("Fontes: dados Psicocult INCT-InEAC e Fiocruz", className="brand-subtitle")
             ], className="brand-text"),
 
@@ -664,7 +643,7 @@ app.layout = html.Div([
                     href=FORM_URL,
                     target="_blank",
                     style={
-                        "backgroundColor": "#5B21B6",
+                        "backgroundColor": "#6247AA",
                         "color": "white",
                         "padding": "10px 12px",
                         "borderRadius": "8px",
@@ -681,10 +660,10 @@ app.layout = html.Div([
                 )
             ], style={
                 "backgroundColor": "#F4EEFF",
-                "border": "1px solid #D8C9FB",
+                "border": "1px solid #DEC9E9",
                 "padding": "12px",
                 "borderRadius": "14px",
-                "boxShadow": "0 6px 18px rgba(91,33,182,0.08)",
+                "boxShadow": "0 6px 18px rgba(98,71,170,0.08)",
                 "marginTop": "10px",
                 "flex": "0 0 auto"
             }),
@@ -713,16 +692,16 @@ app.layout = html.Div([
                     html.Div(
                         dcc.Graph(
                             id="mapa",
-                            style={"height": "65vh", "backgroundColor": "#D3D3D3", "borderRadius": "12px"},
+                            style={"height": "65vh", "backgroundColor": "#EEEAF3", "borderRadius": "12px"},
                             config={"displayModeBar": False}
                         ),
                         className="map-panel",
                         style={
-                            "backgroundColor": "#D3D3D3",
+                            "backgroundColor": "#EEEAF3",
                             "border": "1px solid #CFC3F2",
                             "borderRadius": "16px",
                             "padding": "8px",
-                            "boxShadow": "0 8px 20px rgba(91,33,182,0.10)",
+                            "boxShadow": "0 8px 20px rgba(98,71,170,0.10)",
                             "marginTop": "8px"
                         }
                     ),
@@ -742,7 +721,7 @@ app.layout = html.Div([
                                     "filter_query": "{status_verificacao} = \"Verificada\"",
                                     "column_id": COL_NOME
                                 },
-                                "color": "#5B21B6",
+                                "color": "#6247AA",
                                 "fontWeight": "700"
                             }
                         ],
@@ -753,25 +732,25 @@ app.layout = html.Div([
 
                 dcc.Tab(label="Estatísticas", children=[
                     html.Div([
-                        html.Div(dcc.Graph(id="rank-mun"), style={"backgroundColor": "#FBF9FF", "border": "1px solid #D8C9FB", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="linha-fundacao"), style={"backgroundColor": "#FBF9FF", "border": "1px solid #D8C9FB", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rank-mun"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="linha-fundacao"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
                     ], style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "12px", "marginTop": "8px"}),
 
                     html.Div([
-                        html.Div(dcc.Graph(id="rosca-cnpj"), style={"backgroundColor": "#FBF9FF", "border": "1px solid #D8C9FB", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-presenca-digital"), style={"backgroundColor": "#FBF9FF", "border": "1px solid #D8C9FB", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rosca-cnpj"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rosca-presenca-digital"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
                     ], style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "12px", "marginTop": "12px"}),
 
-                    html.H4("Serviços e produtos", style={"marginTop": "18px", "marginBottom": "8px", "color": "#3B0764"}),
+                    html.H4("Serviços e produtos", style={"marginTop": "18px", "marginBottom": "8px", "color": "#6247AA"}),
                     html.Div([
-                        html.Div(dcc.Graph(id="rosca-serv-0"), style={"backgroundColor": "#FBF9FF", "border": "1px solid #D8C9FB", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-1"), style={"backgroundColor": "#FBF9FF", "border": "1px solid #D8C9FB", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-2"), style={"backgroundColor": "#FBF9FF", "border": "1px solid #D8C9FB", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-3"), style={"backgroundColor": "#FBF9FF", "border": "1px solid #D8C9FB", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-4"), style={"backgroundColor": "#FBF9FF", "border": "1px solid #D8C9FB", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-5"), style={"backgroundColor": "#FBF9FF", "border": "1px solid #D8C9FB", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-6"), style={"backgroundColor": "#FBF9FF", "border": "1px solid #D8C9FB", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-7"), style={"backgroundColor": "#FBF9FF", "border": "1px solid #D8C9FB", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rosca-serv-0"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rosca-serv-1"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rosca-serv-2"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rosca-serv-3"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rosca-serv-4"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rosca-serv-5"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rosca-serv-6"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rosca-serv-7"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
                     ], style={"display": "grid", "gridTemplateColumns": "repeat(2, minmax(280px, 1fr))", "gap": "12px", "marginTop": "8px", "marginBottom": "12px"}),
                 ]),
 
@@ -881,16 +860,16 @@ def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
     kpis = [
         html.Div([html.Div("Associações", style={"opacity": 0.7}),
                   html.H3(f"{total:,}".replace(",", "."))],
-                 style={"border": "1px solid #D8C9FB", "borderRadius": "12px", "padding": "12px", "backgroundColor": "#FBF9FF", "boxShadow": "0 1px 4px rgba(0,0,0,0.04)"}),
+                 style={"border": "1px solid #DEC9E9", "borderRadius": "12px", "padding": "12px", "backgroundColor": "#F8F4FB", "boxShadow": "0 1px 4px rgba(0,0,0,0.04)"}),
         html.Div([html.Div("UFs", style={"opacity": 0.7}),
                   html.H3(str(n_ufs))],
-                 style={"border": "1px solid #D8C9FB", "borderRadius": "12px", "padding": "12px", "backgroundColor": "#FBF9FF", "boxShadow": "0 1px 4px rgba(0,0,0,0.04)"}),
+                 style={"border": "1px solid #DEC9E9", "borderRadius": "12px", "padding": "12px", "backgroundColor": "#F8F4FB", "boxShadow": "0 1px 4px rgba(0,0,0,0.04)"}),
         html.Div([html.Div("Municípios", style={"opacity": 0.7}),
                   html.H3(str(n_muns))],
-                 style={"border": "1px solid #D8C9FB", "borderRadius": "12px", "padding": "12px", "backgroundColor": "#FBF9FF", "boxShadow": "0 1px 4px rgba(0,0,0,0.04)"}),
+                 style={"border": "1px solid #DEC9E9", "borderRadius": "12px", "padding": "12px", "backgroundColor": "#F8F4FB", "boxShadow": "0 1px 4px rgba(0,0,0,0.04)"}),
         html.Div([html.Div("Possui CNPJ", style={"opacity": 0.7}),
                   html.H3(f"{pct_cnpj:.0f}%")],
-                 style={"border": "1px solid #D8C9FB", "borderRadius": "12px", "padding": "12px", "backgroundColor": "#FBF9FF", "boxShadow": "0 1px 4px rgba(0,0,0,0.04)"}),
+                 style={"border": "1px solid #DEC9E9", "borderRadius": "12px", "padding": "12px", "backgroundColor": "#F8F4FB", "boxShadow": "0 1px 4px rgba(0,0,0,0.04)"}),
     ]
 
     # mapa dinâmico (UF / municípios)
@@ -964,16 +943,16 @@ def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
                         )
 
                         fig_mapa.update_traces(
-                            marker_line_color="rgba(91,33,182,0.45)",
+                            marker_line_color="rgba(98,71,170,0.45)",
                             marker_line_width=0.65
                         )
                         fig_mapa.update_geos(
                             fitbounds="locations",
                             visible=False,
-                            bgcolor="#D3D3D3"
+                            bgcolor=MAP_BG
                         )
-                        fig_mapa = apply_map_background(fig_mapa, geo_bg="#D3D3D3")
-                        fig_mapa = apply_plot_theme(fig_mapa, paper_bg="#D3D3D3", plot_bg="#D3D3D3")
+                        fig_mapa = apply_map_background(fig_mapa, geo_bg=MAP_BG)
+                        fig_mapa = apply_plot_theme(fig_mapa, paper_bg=MAP_BG, plot_bg=MAP_BG)
 
         else:
             por_uf = (
@@ -983,30 +962,47 @@ def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
                 .dropna(subset=["uf_sigla"])
             )
 
-            if por_uf.empty:
-                fig_mapa = blank_fig("Mapa: sem dados após filtros.")
+            # base completa com todas as UFs do GeoJSON para manter o contorno
+            # de todos os estados, mesmo quando não houver associação no recorte
+            todas_ufs = []
+            for ft in BRAZIL_STATES_GEOJSON.get("features", []):
+                props = ft.get("properties", {})
+                sigla = props.get("sigla")
+                nome = props.get("name") or props.get("nome") or sigla
+                if sigla:
+                    todas_ufs.append({"uf_sigla": sigla, "UF_nome": nome})
+
+            base_ufs = pd.DataFrame(todas_ufs).drop_duplicates(subset=["uf_sigla"])
+
+            if base_ufs.empty:
+                fig_mapa = blank_fig("Mapa de estados indisponível.")
             else:
+                base_ufs = base_ufs.merge(por_uf, on="uf_sigla", how="left")
+                base_ufs["n"] = base_ufs["n"].fillna(0).astype(int)
+
                 fig_mapa = px.choropleth(
-                    por_uf,
+                    base_ufs,
                     geojson=BRAZIL_STATES_GEOJSON,
                     locations="uf_sigla",
                     featureidkey="properties.sigla",
                     color="n",
+                    hover_name="UF_nome",
                     title="Distribuição de associações por UF",
                     color_continuous_scale=PURPLE_SCALE,
                 )
                 fig_mapa.update_traces(
-                    marker_line_color="rgba(91,33,182,0.78)",
-                    marker_line_width=1.35
+                    marker_line_color="rgba(98,71,170,0.78)",
+                    marker_line_width=1.35,
+                    hovertemplate="<b>%{hovertext}</b><br>Nº de associações: %{z}<extra></extra>"
                 )
                 fig_mapa.update_geos(
-                    fitbounds="locations",
                     visible=False,
-                    bgcolor="#D3D3D3",
-                    projection_scale=1
+                    bgcolor=MAP_BG,
+                    center={"lat": -14.5, "lon": -52.0},
+                    projection_scale=3.8
                 )
-                fig_mapa = apply_map_background(fig_mapa, geo_bg="#D3D3D3")
-                fig_mapa = apply_plot_theme(fig_mapa, paper_bg="#D3D3D3", plot_bg="#D3D3D3")
+                fig_mapa = apply_map_background(fig_mapa, geo_bg=MAP_BG)
+                fig_mapa = apply_plot_theme(fig_mapa, paper_bg=MAP_BG, plot_bg=MAP_BG)
 
     except Exception as e:
         print("ERRO NO MAPA DINÂMICO:", repr(e))
@@ -1036,7 +1032,7 @@ def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
                 color="n",
                 color_continuous_scale=PURPLE_SCALE,
             )
-            fig_mun.update_layout(coloraxis_showscale=False, paper_bgcolor="#FBF9FF", plot_bgcolor="#FBF9FF")
+            fig_mun.update_layout(coloraxis_showscale=False, paper_bgcolor="#F8F4FB", plot_bgcolor="#F8F4FB")
             fig_mun = apply_plot_theme(fig_mun)
         else:
             fig_mun = blank_fig("Ranking de municípios indisponível.")
@@ -1061,8 +1057,8 @@ def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
             fig_fund.update_layout(
                 xaxis_title="Ano de fundação",
                 yaxis_title="Nº de associações",
-                paper_bgcolor="#FBF9FF",
-                plot_bgcolor="#FBF9FF",
+                paper_bgcolor="#F8F4FB",
+                plot_bgcolor="#F8F4FB",
             )
             fig_fund = apply_plot_theme(fig_fund)
         else:
@@ -1170,7 +1166,7 @@ def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
                     "filter_query": "{status_verificacao} = \"Verificada\"",
                     "column_id": COL_NOME
                 },
-                "color": "#5B21B6",
+                "color": "#6247AA",
                 "fontWeight": "700"
             }
         ]
