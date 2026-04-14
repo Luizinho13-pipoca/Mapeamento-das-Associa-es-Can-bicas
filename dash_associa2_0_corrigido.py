@@ -364,6 +364,7 @@ def make_donut_from_counts(counts_df: pd.DataFrame, names_col: str, values_col: 
     return apply_plot_theme(fig)
 
 
+
 # =========================================================
 # NORMALIZAÇÃO DE MUNICÍPIO
 # =========================================================
