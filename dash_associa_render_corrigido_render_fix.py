@@ -1268,4 +1268,4 @@ def download_csv(_, table_data):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
     app.run(debug=False, host="0.0.0.0", port=port)
-Exibindo dash_associa_render_corrigido_render_fix.py…
+
