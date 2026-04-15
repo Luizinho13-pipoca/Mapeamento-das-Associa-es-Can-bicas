@@ -1,4 +1,3 @@
-
 import os
 import re
 import io
@@ -21,7 +20,7 @@ import plotly.graph_objects as go
 # - link direto de download
 # - Google Sheets CSV publicado
 # - export XLSX do Google Sheets
-DATA_SOURCE = "https://docs.google.com/spreadsheets/d/1BQvUkVC9hAQIWgVHV42_JsQwlSVhrGYe/export?format=xlsx"
+DATA_SOURCE = "https://docs.google.com/spreadsheets/d/1BQvUkVC9hAQIWgVHV42_JsQwlSVhrGYe/export?format=csv"
 
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdZJ3ARpU9ej_xyanT2wfWyotBC_WMY_jsZhRgRRXmzuLylew/viewform"
 
@@ -223,6 +222,11 @@ def read_bytes_as_table(content: bytes, source_name: str = "") -> pd.DataFrame:
             df = pd.read_excel(io.BytesIO(content))
             df.columns = [normalize_colname(c) for c in df.columns]
             return df
+        except ImportError as e:
+            raise ImportError(
+                "A fonte de dados está em Excel, mas a dependência 'openpyxl' não está instalada no ambiente. "
+                "Na Render, adicione 'openpyxl' ao requirements.txt ou troque a fonte para CSV."
+            ) from e
         except Exception:
             pass
 
@@ -231,6 +235,9 @@ def read_bytes_as_table(content: bytes, source_name: str = "") -> pd.DataFrame:
         df = pd.read_excel(io.BytesIO(content))
         df.columns = [normalize_colname(c) for c in df.columns]
         return df
+    except ImportError:
+        # Se não houver suporte a Excel no ambiente, seguimos para CSV somente
+        pass
     except Exception:
         pass
 
@@ -362,7 +369,6 @@ def make_donut_from_counts(counts_df: pd.DataFrame, names_col: str, values_col: 
         margin={"l": 10, "r": 10, "t": 60, "b": 10},
     )
     return apply_plot_theme(fig)
-
 
 
 # =========================================================
@@ -576,11 +582,15 @@ BRAZIL_STATES_GEOJSON_URL = (
     "codeforamerica/click_that_hood/master/"
     "public/data/brazil-states.geojson"
 )
-BRAZIL_STATES_GEOJSON = requests.get(
-    BRAZIL_STATES_GEOJSON_URL,
-    timeout=30,
-    headers=REQUEST_HEADERS
-).json()
+try:
+    BRAZIL_STATES_GEOJSON = requests.get(
+        BRAZIL_STATES_GEOJSON_URL,
+        timeout=30,
+        headers=REQUEST_HEADERS
+    ).json()
+except Exception as e:
+    print("ERRO AO CARREGAR GEOJSON DOS ESTADOS:", repr(e))
+    BRAZIL_STATES_GEOJSON = {"type": "FeatureCollection", "features": []}
 
 
 # =========================================================
@@ -1257,3 +1267,4 @@ def download_csv(_, table_data):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8050))
     app.run(debug=False, host="0.0.0.0", port=port)
+Exibindo dash_associa_render_corrigido_render_fix.py…
