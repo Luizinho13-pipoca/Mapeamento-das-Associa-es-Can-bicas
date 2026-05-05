@@ -645,6 +645,7 @@ LISTA_STYLE_HEADER = {"fontWeight": "bold"}
 HEADER_H = "96px"
 
 app.layout = html.Div([
+    dcc.Store(id="store-filtered-data"),
 
     html.Div([
         html.Div([
@@ -891,27 +892,25 @@ app.layout = html.Div([
 ])
 
 
+def read_filtered_store(json_data):
+    if not json_data:
+        return df.iloc[0:0].copy()
+
+    try:
+        d = pd.read_json(io.StringIO(json_data), orient="split")
+    except Exception as e:
+        print("ERRO AO LER STORE FILTRADO:", repr(e))
+        return df.iloc[0:0].copy()
+
+    for col in ["tem_instagram", "tem_site", "tem_cnpj", "associacao_verificada"]:
+        if col in d.columns:
+            d[col] = d[col].astype("boolean").fillna(False).astype(bool)
+
+    return d
+
+
 @app.callback(
-    Output("kpis", "children"),
-    Output("mapa", "figure"),
-    Output("mapa-info", "children"),
-    Output("rank-mun", "figure"),
-    Output("linha-fundacao", "figure"),
-    Output("rosca-cnpj", "figure"),
-    Output("rosca-presenca-digital", "figure"),
-    Output("rosca-serv-0", "figure"),
-    Output("rosca-serv-1", "figure"),
-    Output("rosca-serv-2", "figure"),
-    Output("rosca-serv-3", "figure"),
-    Output("rosca-serv-4", "figure"),
-    Output("rosca-serv-5", "figure"),
-    Output("rosca-serv-6", "figure"),
-    Output("rosca-serv-7", "figure"),
-    Output("tabela", "data"),
-    Output("tabela", "columns"),
-    Output("lista-mapa", "data"),
-    Output("lista-mapa", "columns"),
-    Output("lista-mapa", "style_data_conditional"),
+    Output("store-filtered-data", "data"),
     Input("f-uf", "value"),
     Input("f-mun", "value"),
     Input("f-verificacao", "value"),
@@ -919,7 +918,7 @@ app.layout = html.Div([
     Input("f-servicos", "value"),
     Input("f-links", "value"),
 )
-def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
+def filter_data(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
     mask = pd.Series(True, index=df.index)
 
     if f_uf:
@@ -952,7 +951,15 @@ def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
             mask &= df[c].isin(["sim"])
 
     d = df.loc[mask].copy()
+    return d.to_json(orient="split", date_format="iso")
 
+
+@app.callback(
+    Output("kpis", "children"),
+    Input("store-filtered-data", "data"),
+)
+def update_kpis(json_data):
+    d = read_filtered_store(json_data)
     total = len(d)
     n_ufs = (
         d[COL_UF].dropna().astype(str).str.strip().replace("", pd.NA).dropna().nunique()
@@ -964,7 +971,7 @@ def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
     )
     pct_cnpj = (d["tem_cnpj"].mean() * 100) if total else 0
 
-    kpis = [
+    return [
         html.Div([html.Div("Associações", style={"opacity": 0.7}),
                   html.H3(f"{total:,}".replace(",", "."))],
                  style=KPI_CARD_STYLE),
@@ -978,6 +985,19 @@ def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
                   html.H3(f"{pct_cnpj:.0f}%")],
                  style=KPI_CARD_STYLE),
     ]
+
+
+@app.callback(
+    Output("mapa", "figure"),
+    Output("mapa-info", "children"),
+    Output("lista-mapa", "data"),
+    Output("lista-mapa", "columns"),
+    Output("lista-mapa", "style_data_conditional"),
+    Input("store-filtered-data", "data"),
+    Input("f-uf", "value"),
+)
+def update_map(json_data, f_uf):
+    d = read_filtered_store(json_data)
 
     try:
         ufs_filtradas = []
@@ -1114,6 +1134,69 @@ def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
         mapa_info = "Não foi possível renderizar o mapa atual."
 
     try:
+        base_cols = [c for c in [COL_NOME, COL_SIGLA, COL_UF, COL_MUN, "status_verificacao"] if c in d.columns]
+        pull_cols = base_cols[:]
+        if COL_INSTAGRAM in d.columns:
+            pull_cols.append(COL_INSTAGRAM)
+        if COL_SITE in d.columns:
+            pull_cols.append(COL_SITE)
+
+        d_list = d[pull_cols].copy() if pull_cols else pd.DataFrame()
+
+        if not d_list.empty:
+            d_list["Instagram"] = d_list[COL_INSTAGRAM].apply(lambda x: make_md_link(x, "Instagram")) if COL_INSTAGRAM in d_list.columns else ""
+            d_list["Site"] = d_list[COL_SITE].apply(lambda x: make_md_link(x, "Site")) if COL_SITE in d_list.columns else ""
+
+            show_cols = [c for c in [COL_NOME, COL_SIGLA, COL_UF, COL_MUN, "Instagram", "Site", "status_verificacao"] if c in d_list.columns]
+            d_list = d_list[show_cols].copy()
+
+            if COL_NOME in d_list.columns:
+                d_list = d_list.sort_values(COL_NOME, kind="stable")
+            d_list = d_list.head(300)
+
+            lista_columns = []
+            for c in d_list.columns:
+                col = {"name": c, "id": c}
+                if c in ["Instagram", "Site"]:
+                    col["presentation"] = "markdown"
+                lista_columns.append(col)
+
+            lista_data = d_list.to_dict("records")
+        else:
+            lista_columns = [{"name": "Sem dados", "id": "Sem dados"}]
+            lista_data = [{"Sem dados": "Nenhuma associação no recorte atual."}]
+
+        lista_style_data_conditional = [
+            {
+                "if": {
+                    "filter_query": "{status_verificacao} = \"Verificada\"",
+                    "column_id": COL_NOME
+                },
+                "color": "#6247AA",
+                "fontWeight": "700"
+            }
+        ]
+
+    except Exception as e:
+        print("ERRO NA LISTA ABAIXO DO MAPA:", repr(e))
+        lista_columns = [{"name": "Erro", "id": "Erro"}]
+        lista_data = [{"Erro": f"Falha ao montar lista: {type(e).__name__}"}]
+        lista_style_data_conditional = []
+
+    return fig_mapa, mapa_info, lista_data, lista_columns, lista_style_data_conditional
+
+
+@app.callback(
+    Output("rank-mun", "figure"),
+    Output("linha-fundacao", "figure"),
+    Output("rosca-cnpj", "figure"),
+    Output("rosca-presenca-digital", "figure"),
+    Input("store-filtered-data", "data"),
+)
+def update_main_stats(json_data):
+    d = read_filtered_store(json_data)
+
+    try:
         if COL_MUN in d.columns:
             rmun = (
                 d[COL_MUN]
@@ -1196,6 +1279,22 @@ def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
         print("ERRO NA ROSCA PRESENÇA DIGITAL:", repr(e))
         fig_presenca = blank_fig(f"Presença digital (erro): {type(e).__name__}")
 
+    return fig_mun, fig_fund, fig_cnpj, fig_presenca
+
+
+@app.callback(
+    Output("rosca-serv-0", "figure"),
+    Output("rosca-serv-1", "figure"),
+    Output("rosca-serv-2", "figure"),
+    Output("rosca-serv-3", "figure"),
+    Output("rosca-serv-4", "figure"),
+    Output("rosca-serv-5", "figure"),
+    Output("rosca-serv-6", "figure"),
+    Output("rosca-serv-7", "figure"),
+    Input("store-filtered-data", "data"),
+)
+def update_service_charts(json_data):
+    d = read_filtered_store(json_data)
     figs_serv = []
     for serv_col in SERV_COLS:
         try:
@@ -1219,6 +1318,16 @@ def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
             fig_serv = blank_fig(f"{shorten_service_label(serv_col)} (erro): {type(e).__name__}")
         figs_serv.append(fig_serv)
 
+    return tuple(figs_serv)
+
+
+@app.callback(
+    Output("tabela", "data"),
+    Output("tabela", "columns"),
+    Input("store-filtered-data", "data"),
+)
+def update_table(json_data):
+    d = read_filtered_store(json_data)
     table_cols = [
         c for c in [
             COL_ID, COL_NOME, COL_SIGLA, COL_UF, COL_MUN, "tem_instagram", "tem_site",
@@ -1229,65 +1338,7 @@ def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
     d_show = d[table_cols].copy()
     columns = [{"name": c, "id": c} for c in d_show.columns]
     data = d_show.to_dict("records")
-
-    try:
-        base_cols = [c for c in [COL_NOME, COL_SIGLA, COL_UF, COL_MUN, "status_verificacao"] if c in d.columns]
-        pull_cols = base_cols[:]
-        if COL_INSTAGRAM in d.columns:
-            pull_cols.append(COL_INSTAGRAM)
-        if COL_SITE in d.columns:
-            pull_cols.append(COL_SITE)
-
-        d_list = d[pull_cols].copy() if pull_cols else pd.DataFrame()
-
-        if not d_list.empty:
-            d_list["Instagram"] = d_list[COL_INSTAGRAM].apply(lambda x: make_md_link(x, "Instagram")) if COL_INSTAGRAM in d_list.columns else ""
-            d_list["Site"] = d_list[COL_SITE].apply(lambda x: make_md_link(x, "Site")) if COL_SITE in d_list.columns else ""
-
-            show_cols = [c for c in [COL_NOME, COL_SIGLA, COL_UF, COL_MUN, "Instagram", "Site", "status_verificacao"] if c in d_list.columns]
-            d_list = d_list[show_cols].copy()
-
-            if COL_NOME in d_list.columns:
-                d_list = d_list.sort_values(COL_NOME, kind="stable")
-            d_list = d_list.head(300)
-
-            lista_columns = []
-            for c in d_list.columns:
-                col = {"name": c, "id": c}
-                if c in ["Instagram", "Site"]:
-                    col["presentation"] = "markdown"
-                lista_columns.append(col)
-
-            lista_data = d_list.to_dict("records")
-        else:
-            lista_columns = [{"name": "Sem dados", "id": "Sem dados"}]
-            lista_data = [{"Sem dados": "Nenhuma associação no recorte atual."}]
-
-        lista_style_data_conditional = [
-            {
-                "if": {
-                    "filter_query": "{status_verificacao} = \"Verificada\"",
-                    "column_id": COL_NOME
-                },
-                "color": "#6247AA",
-                "fontWeight": "700"
-            }
-        ]
-
-    except Exception as e:
-        print("ERRO NA LISTA ABAIXO DO MAPA:", repr(e))
-        lista_columns = [{"name": "Erro", "id": "Erro"}]
-        lista_data = [{"Erro": f"Falha ao montar lista: {type(e).__name__}"}]
-        lista_style_data_conditional = []
-
-    return (
-        kpis, fig_mapa, mapa_info, fig_mun,
-        fig_fund, fig_cnpj, fig_presenca,
-        figs_serv[0], figs_serv[1], figs_serv[2], figs_serv[3],
-        figs_serv[4], figs_serv[5], figs_serv[6], figs_serv[7],
-        data, columns,
-        lista_data, lista_columns, lista_style_data_conditional
-    )
+    return data, columns
 
 
 @app.callback(
