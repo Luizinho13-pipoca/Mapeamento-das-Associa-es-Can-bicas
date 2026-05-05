@@ -68,6 +68,14 @@ PURPLE_SCALE = [
     [1.00, "#6247AA"],
 ]
 
+KPI_CARD_STYLE = {
+    "border": "1px solid #DEC9E9",
+    "borderRadius": "12px",
+    "padding": "12px",
+    "backgroundColor": "#F8F4FB",
+    "boxShadow": "0 1px 4px rgba(0,0,0,0.04)",
+}
+
 
 # =========================================================
 # HELPERS VISUAIS
@@ -549,7 +557,33 @@ df["uf_sigla"] = uf_raw.map(UF_SIGLA)
 uf_up = uf_raw.astype(str).str.upper()
 df.loc[uf_up.str.fullmatch(r"[A-Z]{2}", na=False), "uf_sigla"] = uf_up
 
-df["associacao_verificada"] = df.apply(lambda row: compute_verificada_flag(row, SERV_COLS), axis=1)
+ufs_presentes = df["uf_sigla"].dropna().astype(str).str.strip().unique()
+for uf in ufs_presentes:
+    if not uf:
+        continue
+    try:
+        get_mun_geojson_for_uf(uf)
+    except Exception as e:
+        print(f"AVISO AO PRE-CARREGAR GEOJSON MUNICIPAL ({uf}): {repr(e)}")
+
+serv_cols_disponiveis = [c for c in SERV_COLS if c in df.columns]
+if serv_cols_disponiveis:
+    serv_norm = (
+        df[serv_cols_disponiveis]
+        .astype("string")
+        .apply(lambda col: (
+            col.str.strip()
+            .str.lower()
+            .str.replace(".", "", regex=False)
+            .str.replace(";", "", regex=False)
+            .str.replace(",", "", regex=False)
+        ))
+    )
+    df["associacao_verificada"] = serv_norm.isin(
+        ["sim", "s", "yes", "y", "n\u00e3o", "nao", "n", "no", "mp", "m/p"]
+    ).any(axis=1)
+else:
+    df["associacao_verificada"] = False
 df["status_verificacao"] = df["associacao_verificada"].map({True: "Verificada", False: "Não verificada"})
 
 for c in SERV_COLS:
@@ -886,36 +920,38 @@ app.layout = html.Div([
     Input("f-links", "value"),
 )
 def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
-    d = df.copy()
+    mask = pd.Series(True, index=df.index)
 
     if f_uf:
-        d = d[as_stripped(safe_col(d, COL_UF)).isin([str(x).strip() for x in f_uf])]
+        mask &= as_stripped(safe_col(df, COL_UF)).isin([str(x).strip() for x in f_uf])
     if f_mun:
-        d = d[as_stripped(safe_col(d, COL_MUN)).isin([str(x).strip() for x in f_mun])]
+        mask &= as_stripped(safe_col(df, COL_MUN)).isin([str(x).strip() for x in f_mun])
 
     if f_verificacao == "verificadas":
-        d = d[d["associacao_verificada"] == True]
+        mask &= df["associacao_verificada"] == True
     elif f_verificacao == "nao_verificadas":
-        d = d[d["associacao_verificada"] == False]
+        mask &= df["associacao_verificada"] == False
 
     if f_cnpj == "com_cnpj":
-        d = d[d["tem_cnpj"] == True]
+        mask &= df["tem_cnpj"] == True
     elif f_cnpj == "sem_cnpj":
-        d = d[d["tem_cnpj"] == False]
+        mask &= df["tem_cnpj"] == False
 
     if f_links:
         if "ig" in f_links:
-            d = d[d["tem_instagram"] == True]
+            mask &= df["tem_instagram"] == True
         if "site" in f_links:
-            d = d[d["tem_site"] == True]
+            mask &= df["tem_site"] == True
 
     for c in (f_serv or []):
-        if c not in d.columns:
+        if c not in df.columns:
             continue
         if "atendimento médico" in c.lower() or "atendimento medico" in c.lower():
-            d = d[d[c].isin(["sim", "MP"])]
+            mask &= df[c].isin(["sim", "MP"])
         else:
-            d = d[d[c].isin(["sim"])]
+            mask &= df[c].isin(["sim"])
+
+    d = df.loc[mask].copy()
 
     total = len(d)
     n_ufs = (
@@ -931,16 +967,16 @@ def update_dashboard(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
     kpis = [
         html.Div([html.Div("Associações", style={"opacity": 0.7}),
                   html.H3(f"{total:,}".replace(",", "."))],
-                 style={"border": "1px solid #DEC9E9", "borderRadius": "12px", "padding": "12px", "backgroundColor": "#F8F4FB", "boxShadow": "0 1px 4px rgba(0,0,0,0.04)"}),
+                 style=KPI_CARD_STYLE),
         html.Div([html.Div("UFs", style={"opacity": 0.7}),
                   html.H3(str(n_ufs))],
-                 style={"border": "1px solid #DEC9E9", "borderRadius": "12px", "padding": "12px", "backgroundColor": "#F8F4FB", "boxShadow": "0 1px 4px rgba(0,0,0,0.04)"}),
+                 style=KPI_CARD_STYLE),
         html.Div([html.Div("Municípios", style={"opacity": 0.7}),
                   html.H3(str(n_muns))],
-                 style={"border": "1px solid #DEC9E9", "borderRadius": "12px", "padding": "12px", "backgroundColor": "#F8F4FB", "boxShadow": "0 1px 4px rgba(0,0,0,0.04)"}),
+                 style=KPI_CARD_STYLE),
         html.Div([html.Div("Possui CNPJ", style={"opacity": 0.7}),
                   html.H3(f"{pct_cnpj:.0f}%")],
-                 style={"border": "1px solid #DEC9E9", "borderRadius": "12px", "padding": "12px", "backgroundColor": "#F8F4FB", "boxShadow": "0 1px 4px rgba(0,0,0,0.04)"}),
+                 style=KPI_CARD_STYLE),
     ]
 
     try:
