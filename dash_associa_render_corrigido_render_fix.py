@@ -21,7 +21,7 @@ import plotly.graph_objects as go
 # - link direto de download
 # - Google Sheets CSV publicado
 # - export XLSX do Google Sheets
-DATA_SOURCE = "https://docs.google.com/spreadsheets/d/1BQvUkVC9hAQIWgVHV42_JsQwlSVhrGYe/export?format=csv"
+DATA_SOURCE = "https://docs.google.com/spreadsheets/d/1bjZZikmlSxozqXgsR9Stm4UXnQKX3zpK/edit?usp=sharing&ouid=116222672595798367643&rtpof=true&sd=true"
 
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdZJ3ARpU9ej_xyanT2wfWyotBC_WMY_jsZhRgRRXmzuLylew/viewform"
 
@@ -176,6 +176,10 @@ def normalize_colname(c: str) -> str:
 def convert_drive_url(url: str) -> str:
     if not isinstance(url, str):
         return url
+
+    if "docs.google.com/spreadsheets/d/" in url and "/export?" not in url:
+        sheet_id = url.split("/d/")[1].split("/")[0]
+        return f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
 
     if "drive.google.com/file/d/" in url:
         file_id = url.split("/d/")[1].split("/")[0]
@@ -348,6 +352,7 @@ def shorten_service_label(label: str) -> str:
         "Oferece assistência jurídica? (sim, não ou NI)": "Assistência jurídica",
         'Oferece "acolhimento"? (sim, não ou NI)': "Acolhimento",
         "Oferece algum outro tipo de serviço? (sim, não ou NI)": "Outro serviço",
+        "Oferece Flores?": "Oferece Flores",
     }
     return mapping.get(label, label)
 
@@ -475,6 +480,8 @@ COL_ID_LONGA = "ID da associação"
 
 if COL_UF_LONGA in df.columns:
     df["UF"] = df[COL_UF_LONGA].astype(str).str.strip()
+elif "Unidade da Federação" in df.columns:
+    df["UF"] = df["Unidade da Federação"].astype(str).str.strip()
 
 if COL_MUN_LONGA in df.columns:
     df["Município"] = df[COL_MUN_LONGA].astype(str).str.strip()
@@ -502,6 +509,10 @@ COL_SITE = 'Site ou página web (link ou "não encontrado")'
 COL_OBS = "Observação"
 COL_CNPJ = "CNPJ"
 COL_DT_FUND = "dt_fundacao_osc"
+COL_FLORES = "Oferece Flores?"
+COL_AUT_CULTIVO = "Possui autorização para cultivo?"
+COL_AUT_ENSINO_PESQUISA = "Associação de ensino e pesquisa"
+AUTORIZACAO_COLS = [COL_AUT_CULTIVO, COL_AUT_ENSINO_PESQUISA]
 
 SERV_COLS = [
     "Distribuição de óleo à base de cannabis (sim, não ou NI)",
@@ -512,6 +523,7 @@ SERV_COLS = [
     "Oferece assistência jurídica? (sim, não ou NI)",
     'Oferece "acolhimento"? (sim, não ou NI)',
     "Oferece algum outro tipo de serviço? (sim, não ou NI)",
+    COL_FLORES,
 ]
 
 # fallback leve para bases sem ID/Sigla
@@ -590,6 +602,10 @@ for c in SERV_COLS:
     if c in df.columns:
         df[c] = df[c].apply(norm_resp)
 
+for c in AUTORIZACAO_COLS:
+    if c in df.columns:
+        df[c] = df[c].apply(norm_resp)
+
 df["tem_instagram"] = df[COL_INSTAGRAM].apply(is_found_link) if COL_INSTAGRAM in df.columns else False
 df["tem_site"] = df[COL_SITE].apply(is_found_link) if COL_SITE in df.columns else False
 df["tem_cnpj"] = (
@@ -643,6 +659,20 @@ LISTA_STYLE_CELL = {"textAlign": "left", "whiteSpace": "normal", "height": "auto
 LISTA_STYLE_HEADER = {"fontWeight": "bold"}
 
 HEADER_H = "96px"
+
+
+def dropdown_options_for_resp_col(col):
+    base = [{"label": "Todas", "value": "todas"}]
+    if col not in df.columns:
+        return base
+
+    values = set(as_stripped(df[col]).dropna())
+    order = [("sim", "Sim"), ("não", "Não"), ("NI", "NI"), ("MP", "MP")]
+    return base + [{"label": label, "value": value} for value, label in order if value in values]
+
+
+def auth_filter_style(col):
+    return {} if col in df.columns else {"display": "none"}
 
 app.layout = html.Div([
     dcc.Store(id="store-filtered-data"),
@@ -711,6 +741,28 @@ app.layout = html.Div([
                     value="todas",
                     clearable=False
                 ),
+
+                html.Hr(),
+                html.H4("Autorizações"),
+                html.Div([
+                    html.Label("Cultivo"),
+                    dcc.Dropdown(
+                        id="f-aut-cultivo",
+                        options=dropdown_options_for_resp_col(COL_AUT_CULTIVO),
+                        value="todas",
+                        clearable=False,
+                    ),
+                ], style=auth_filter_style(COL_AUT_CULTIVO)),
+                html.Div([
+                    html.Br(),
+                    html.Label("Ensino e pesquisa"),
+                    dcc.Dropdown(
+                        id="f-aut-cultivo-2",
+                        options=dropdown_options_for_resp_col(COL_AUT_ENSINO_PESQUISA),
+                        value="todas",
+                        clearable=False,
+                    ),
+                ], style=auth_filter_style(COL_AUT_ENSINO_PESQUISA)),
 
                 html.Hr(),
                 html.H4("Serviços / Produtos (mostrar apenas quem tem)"),
@@ -813,6 +865,21 @@ app.layout = html.Div([
                     ),
 
                     html.Hr(),
+                    dcc.Input(
+                        id="f-busca-nome",
+                        type="text",
+                        placeholder="Buscar associação por nome ou sigla...",
+                        debounce=True,
+                        style={
+                            "width": "100%",
+                            "padding": "10px 12px",
+                            "border": "1px solid #DEC9E9",
+                            "borderRadius": "10px",
+                            "marginTop": "12px",
+                            "marginBottom": "8px",
+                            "fontSize": "14px"
+                        }
+                    ),
                     html.H4("Associações no recorte atual"),
                     dash_table.DataTable(
                         id="lista-mapa",
@@ -857,6 +924,7 @@ app.layout = html.Div([
                         html.Div(dcc.Graph(id="rosca-serv-5"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
                         html.Div(dcc.Graph(id="rosca-serv-6"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
                         html.Div(dcc.Graph(id="rosca-serv-7"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rosca-serv-8"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
                     ], style={"display": "grid", "gridTemplateColumns": "repeat(2, minmax(280px, 1fr))", "gap": "12px", "marginTop": "8px", "marginBottom": "12px"}),
                 ]),
 
@@ -909,16 +977,41 @@ def read_filtered_store(json_data):
     return d
 
 
+def apply_name_search(d, termo):
+    if not termo or not str(termo).strip():
+        return d
+
+    termo_norm = strip_accents(str(termo).strip()).lower()
+    if not termo_norm:
+        return d
+
+    mask = pd.Series(False, index=d.index)
+    for col in [COL_NOME, COL_SIGLA]:
+        if col not in d.columns:
+            continue
+        col_norm = (
+            d[col]
+            .fillna("")
+            .astype(str)
+            .map(lambda x: strip_accents(x).lower())
+        )
+        mask |= col_norm.str.contains(termo_norm, regex=False, na=False)
+
+    return d.loc[mask].copy()
+
+
 @app.callback(
     Output("store-filtered-data", "data"),
     Input("f-uf", "value"),
     Input("f-mun", "value"),
     Input("f-verificacao", "value"),
     Input("f-cnpj", "value"),
+    Input("f-aut-cultivo", "value"),
+    Input("f-aut-cultivo-2", "value"),
     Input("f-servicos", "value"),
     Input("f-links", "value"),
 )
-def filter_data(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
+def filter_data(f_uf, f_mun, f_verificacao, f_cnpj, f_aut_cultivo, f_aut_cultivo_2, f_serv, f_links):
     mask = pd.Series(True, index=df.index)
 
     if f_uf:
@@ -935,6 +1028,11 @@ def filter_data(f_uf, f_mun, f_verificacao, f_cnpj, f_serv, f_links):
         mask &= df["tem_cnpj"] == True
     elif f_cnpj == "sem_cnpj":
         mask &= df["tem_cnpj"] == False
+
+    if f_aut_cultivo and f_aut_cultivo != "todas" and COL_AUT_CULTIVO in df.columns:
+        mask &= df[COL_AUT_CULTIVO] == f_aut_cultivo
+    if f_aut_cultivo_2 and f_aut_cultivo_2 != "todas" and COL_AUT_ENSINO_PESQUISA in df.columns:
+        mask &= df[COL_AUT_ENSINO_PESQUISA] == f_aut_cultivo_2
 
     if f_links:
         if "ig" in f_links:
@@ -995,8 +1093,9 @@ def update_kpis(json_data):
     Output("lista-mapa", "style_data_conditional"),
     Input("store-filtered-data", "data"),
     Input("f-uf", "value"),
+    Input("f-busca-nome", "value"),
 )
-def update_map(json_data, f_uf):
+def update_map(json_data, f_uf, busca_nome):
     d = read_filtered_store(json_data)
 
     try:
@@ -1134,14 +1233,15 @@ def update_map(json_data, f_uf):
         mapa_info = "Não foi possível renderizar o mapa atual."
 
     try:
-        base_cols = [c for c in [COL_NOME, COL_SIGLA, COL_UF, COL_MUN, "status_verificacao"] if c in d.columns]
+        d_list_source = apply_name_search(d, busca_nome)
+        base_cols = [c for c in [COL_NOME, COL_SIGLA, COL_UF, COL_MUN, "status_verificacao"] if c in d_list_source.columns]
         pull_cols = base_cols[:]
-        if COL_INSTAGRAM in d.columns:
+        if COL_INSTAGRAM in d_list_source.columns:
             pull_cols.append(COL_INSTAGRAM)
-        if COL_SITE in d.columns:
+        if COL_SITE in d_list_source.columns:
             pull_cols.append(COL_SITE)
 
-        d_list = d[pull_cols].copy() if pull_cols else pd.DataFrame()
+        d_list = d_list_source[pull_cols].copy() if pull_cols else pd.DataFrame()
 
         if not d_list.empty:
             d_list["Instagram"] = d_list[COL_INSTAGRAM].apply(lambda x: make_md_link(x, "Instagram")) if COL_INSTAGRAM in d_list.columns else ""
@@ -1164,7 +1264,12 @@ def update_map(json_data, f_uf):
             lista_data = d_list.to_dict("records")
         else:
             lista_columns = [{"name": "Sem dados", "id": "Sem dados"}]
-            lista_data = [{"Sem dados": "Nenhuma associação no recorte atual."}]
+            msg = (
+                "Nenhuma associação encontrada para a busca atual."
+                if busca_nome and str(busca_nome).strip()
+                else "Nenhuma associação no recorte atual."
+            )
+            lista_data = [{"Sem dados": msg}]
 
         lista_style_data_conditional = [
             {
@@ -1291,6 +1396,7 @@ def update_main_stats(json_data):
     Output("rosca-serv-5", "figure"),
     Output("rosca-serv-6", "figure"),
     Output("rosca-serv-7", "figure"),
+    Output("rosca-serv-8", "figure"),
     Input("store-filtered-data", "data"),
 )
 def update_service_charts(json_data):
@@ -1325,13 +1431,16 @@ def update_service_charts(json_data):
     Output("tabela", "data"),
     Output("tabela", "columns"),
     Input("store-filtered-data", "data"),
+    Input("f-busca-nome", "value"),
 )
-def update_table(json_data):
+def update_table(json_data, busca_nome):
     d = read_filtered_store(json_data)
+    d = apply_name_search(d, busca_nome)
     table_cols = [
         c for c in [
             COL_ID, COL_NOME, COL_SIGLA, COL_UF, COL_MUN, "tem_instagram", "tem_site",
             *[c for c in SERV_COLS if c in d.columns],
+            *[c for c in AUTORIZACAO_COLS if c in d.columns],
             COL_OBS
         ] if c in d.columns
     ]
