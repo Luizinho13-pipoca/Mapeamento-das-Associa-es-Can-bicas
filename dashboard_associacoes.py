@@ -78,6 +78,37 @@ KPI_CARD_STYLE = {
 
 
 # =========================================================
+# COLUNAS PRINCIPAIS
+# =========================================================
+COL_ID = "ID"
+COL_NOME = "Nome da associação"
+COL_SIGLA = "Sigla ou Nome Comercial"
+COL_UF = "UF"
+COL_MUN = "Município"
+COL_INSTAGRAM = 'Página do Instagram (link ou "não encontrado")'
+COL_SITE = 'Site ou página web (link ou "não encontrado")'
+COL_OBS = "Observação"
+COL_CNPJ = "CNPJ"
+COL_DT_FUND = "dt_fundacao_osc"
+COL_FLORES = "Oferece Flores?"
+COL_AUT_CULTIVO = "Possui autorização para cultivo?"
+COL_AUT_ENSINO_PESQUISA = "Associação de ensino e pesquisa"
+AUTORIZACAO_COLS = [COL_AUT_CULTIVO, COL_AUT_ENSINO_PESQUISA]
+
+SERV_COLS = [
+    "Distribuição de óleo à base de cannabis (sim, não ou NI)",
+    "Distribuição de pomada/gel/creme à base de cannabis (sim, não ou NI)",
+    "Distribuição de produtos específicos para pets à base de cannabis (sim, não ou NI)",
+    "Possui algum outro produto para distribuição à base de cannabis? (sim, não ou NI)",
+    "Oferece atendimento médico? (sim, não, NI ou MP)",
+    "Oferece assistência jurídica? (sim, não ou NI)",
+    'Oferece "acolhimento"? (sim, não ou NI)',
+    "Oferece algum outro tipo de serviço? (sim, não ou NI)",
+    COL_FLORES,
+]
+
+
+# =========================================================
 # HELPERS VISUAIS
 # =========================================================
 def apply_plot_theme(fig, title_color="#6247AA", text_color="#2B193D",
@@ -393,6 +424,10 @@ def strip_accents(s: str) -> str:
     return "".join(ch for ch in s if not unicodedata.combining(ch))
 
 
+def strip_accents_lower(x: str) -> str:
+    return strip_accents(x).lower()
+
+
 def norm_mun_name(x) -> str:
     if pd.isna(x):
         return ""
@@ -438,9 +473,13 @@ def get_mun_geojson_for_uf(uf_sigla: str):
         return None
 
     url = f"https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-{code}-mun.json"
-    gj = requests.get(url, timeout=30, headers=REQUEST_HEADERS).json()
-    GEO_MUN_CACHE[uf_sigla] = gj
-    return gj
+    try:
+        gj = requests.get(url, timeout=30, headers=REQUEST_HEADERS).json()
+        GEO_MUN_CACHE[uf_sigla] = gj
+        return gj
+    except Exception as e:
+        print(f"AVISO AO CARREGAR GEOJSON MUNICIPAL ({uf_sigla}): {repr(e)}")
+        return None
 
 
 def guess_prop_key(geojson: dict):
@@ -495,37 +534,6 @@ if COL_SIGLA_LONGA in df.columns and "Sigla ou Nome Comercial" not in df.columns
 if COL_ID_LONGA in df.columns and "ID" not in df.columns:
     df["ID"] = df[COL_ID_LONGA]
 
-
-# =========================================================
-# COLUNAS PRINCIPAIS
-# =========================================================
-COL_ID = "ID"
-COL_NOME = "Nome da associação"
-COL_SIGLA = "Sigla ou Nome Comercial"
-COL_UF = "UF"
-COL_MUN = "Município"
-COL_INSTAGRAM = 'Página do Instagram (link ou "não encontrado")'
-COL_SITE = 'Site ou página web (link ou "não encontrado")'
-COL_OBS = "Observação"
-COL_CNPJ = "CNPJ"
-COL_DT_FUND = "dt_fundacao_osc"
-COL_FLORES = "Oferece Flores?"
-COL_AUT_CULTIVO = "Possui autorização para cultivo?"
-COL_AUT_ENSINO_PESQUISA = "Associação de ensino e pesquisa"
-AUTORIZACAO_COLS = [COL_AUT_CULTIVO, COL_AUT_ENSINO_PESQUISA]
-
-SERV_COLS = [
-    "Distribuição de óleo à base de cannabis (sim, não ou NI)",
-    "Distribuição de pomada/gel/creme à base de cannabis (sim, não ou NI)",
-    "Distribuição de produtos específicos para pets à base de cannabis (sim, não ou NI)",
-    "Possui algum outro produto para distribuição à base de cannabis? (sim, não ou NI)",
-    "Oferece atendimento médico? (sim, não, NI ou MP)",
-    "Oferece assistência jurídica? (sim, não ou NI)",
-    'Oferece "acolhimento"? (sim, não ou NI)',
-    "Oferece algum outro tipo de serviço? (sim, não ou NI)",
-    COL_FLORES,
-]
-
 # fallback leve para bases sem ID/Sigla
 if COL_ID not in df.columns:
     df[COL_ID] = range(1, len(df) + 1)
@@ -569,14 +577,6 @@ df["uf_sigla"] = uf_raw.map(UF_SIGLA)
 uf_up = uf_raw.astype(str).str.upper()
 df.loc[uf_up.str.fullmatch(r"[A-Z]{2}", na=False), "uf_sigla"] = uf_up
 
-ufs_presentes = df["uf_sigla"].dropna().astype(str).str.strip().unique()
-for uf in ufs_presentes:
-    if not uf:
-        continue
-    try:
-        get_mun_geojson_for_uf(uf)
-    except Exception as e:
-        print(f"AVISO AO PRE-CARREGAR GEOJSON MUNICIPAL ({uf}): {repr(e)}")
 
 serv_cols_disponiveis = [c for c in SERV_COLS if c in df.columns]
 if serv_cols_disponiveis:
@@ -623,6 +623,9 @@ if COL_DT_FUND in df.columns:
 else:
     df["dt_fundacao_parsed"] = pd.NaT
     df["ano_fundacao"] = pd.NA
+
+df["_nome_norm"] = safe_col(df, COL_NOME).fillna("").astype(str).apply(strip_accents_lower)
+df["_sigla_norm"] = safe_col(df, COL_SIGLA).fillna("").astype(str).apply(strip_accents_lower)
 
 
 # =========================================================
@@ -963,18 +966,16 @@ app.layout = html.Div([
 def read_filtered_store(json_data):
     if not json_data:
         return df.iloc[0:0].copy()
-
     try:
-        d = pd.read_json(io.StringIO(json_data), orient="split")
+        if not isinstance(json_data, list):
+            return df.iloc[0:0].copy()
+        valid_indices = [idx for idx in json_data if idx in df.index]
+        if not valid_indices:
+            return df.iloc[0:0].copy()
+        return df.loc[valid_indices].copy()
     except Exception as e:
         print("ERRO AO LER STORE FILTRADO:", repr(e))
         return df.iloc[0:0].copy()
-
-    for col in ["tem_instagram", "tem_site", "tem_cnpj", "associacao_verificada"]:
-        if col in d.columns:
-            d[col] = d[col].astype("boolean").fillna(False).astype(bool)
-
-    return d
 
 
 def apply_name_search(d, termo):
@@ -986,14 +987,18 @@ def apply_name_search(d, termo):
         return d
 
     mask = pd.Series(False, index=d.index)
-    for col in [COL_NOME, COL_SIGLA]:
+    for col, norm_col in [(COL_NOME, "_nome_norm"), (COL_SIGLA, "_sigla_norm")]:
+        if norm_col in d.columns:
+            col_norm = d[norm_col].fillna("").astype(str)
+            mask |= col_norm.str.contains(termo_norm, regex=False, na=False)
+            continue
         if col not in d.columns:
             continue
         col_norm = (
             d[col]
             .fillna("")
             .astype(str)
-            .map(lambda x: strip_accents(x).lower())
+            .apply(strip_accents_lower)
         )
         mask |= col_norm.str.contains(termo_norm, regex=False, na=False)
 
@@ -1020,14 +1025,14 @@ def filter_data(f_uf, f_mun, f_verificacao, f_cnpj, f_aut_cultivo, f_aut_cultivo
         mask &= as_stripped(safe_col(df, COL_MUN)).isin([str(x).strip() for x in f_mun])
 
     if f_verificacao == "verificadas":
-        mask &= df["associacao_verificada"] == True
+        mask &= df["associacao_verificada"]
     elif f_verificacao == "nao_verificadas":
-        mask &= df["associacao_verificada"] == False
+        mask &= ~df["associacao_verificada"]
 
     if f_cnpj == "com_cnpj":
-        mask &= df["tem_cnpj"] == True
+        mask &= df["tem_cnpj"]
     elif f_cnpj == "sem_cnpj":
-        mask &= df["tem_cnpj"] == False
+        mask &= ~df["tem_cnpj"]
 
     if f_aut_cultivo and f_aut_cultivo != "todas" and COL_AUT_CULTIVO in df.columns:
         mask &= df[COL_AUT_CULTIVO] == f_aut_cultivo
@@ -1036,9 +1041,9 @@ def filter_data(f_uf, f_mun, f_verificacao, f_cnpj, f_aut_cultivo, f_aut_cultivo
 
     if f_links:
         if "ig" in f_links:
-            mask &= df["tem_instagram"] == True
+            mask &= df["tem_instagram"]
         if "site" in f_links:
-            mask &= df["tem_site"] == True
+            mask &= df["tem_site"]
 
     for c in (f_serv or []):
         if c not in df.columns:
@@ -1048,8 +1053,7 @@ def filter_data(f_uf, f_mun, f_verificacao, f_cnpj, f_aut_cultivo, f_aut_cultivo
         else:
             mask &= df[c].isin(["sim"])
 
-    d = df.loc[mask].copy()
-    return d.to_json(orient="split", date_format="iso")
+    return df.index[mask].tolist()
 
 
 @app.callback(
