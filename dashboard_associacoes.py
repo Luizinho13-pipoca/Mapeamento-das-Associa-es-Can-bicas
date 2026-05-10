@@ -7,7 +7,7 @@ import unicodedata
 
 import pandas as pd
 import requests
-from dash import Dash, dcc, html, Input, Output, State, dash_table
+from dash import Dash, dcc, html, Input, Output, State, dash_table, no_update
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -31,38 +31,58 @@ REQUEST_HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; DashRenderBot/1.0)"
 }
 
+PRIMARY_PURPLE = "#5B0058"
+PRIMARY_PURPLE_HOVER = "#7A1975"
+PRIMARY_PURPLE_SOFT = "#F4E7F3"
+PRIMARY_PURPLE_BORDER = "#E7CFE5"
+SECONDARY_TEXT = "#4B5563"
+CHART_BG = "#FFFFFF"
+CHART_TEXT = "#1F2937"
+CHART_MUTED = "#6B7280"
+CHART_GRID = "#F1F5F9"
+PRIMARY_PURPLE_SHADOW = "rgba(91,0,88,0.16)"
+PRIMARY_PURPLE_SHADOW_SOFT = "rgba(91,0,88,0.08)"
+PRIMARY_PURPLE_LINE = "rgba(91,0,88,0.42)"
+
 DONUT_PALETTE = [
-    "#6247AA",
-    "#7251B5",
-    "#815AC0",
-    "#9163CB",
-    "#A06CD5",
-    "#B185DB",
-    "#C19EE0",
-    "#D2B7E5",
+    PRIMARY_PURPLE,
+    "#7A1975",
+    "#9D4A97",
+    "#C084FC",
+    "#E879F9",
+    "#F0ABFC",
+    "#D8B2D4",
+    "#E7CFE5",
 ]
 
-MAP_BG = "#D3D3D3"
+CHART_PURPLE_SCALE = [
+    [0.00, "#F3E8FF"],
+    [0.45, "#C084FC"],
+    [1.00, PRIMARY_PURPLE],
+]
+
+MAP_BG = "#F8FAFC"
 
 PURPLE_SCALE = [
-    [0.00, "#DEC9E9"],
-    [0.12, "#DAC3E8"],
-    [0.25, "#D2B7E5"],
-    [0.38, "#C19EE0"],
-    [0.50, "#B185DB"],
-    [0.62, "#A06CD5"],
-    [0.75, "#9163CB"],
-    [0.88, "#815AC0"],
-    [0.94, "#7251B5"],
-    [1.00, "#6247AA"],
+    [0.00, "#F3E8FF"],
+    [0.45, "#C084FC"],
+    [1.00, "#6B21A8"],
 ]
 
 KPI_CARD_STYLE = {
-    "border": "1px solid #DEC9E9",
+    "border": f"1px solid {PRIMARY_PURPLE_BORDER}",
     "borderRadius": "12px",
     "padding": "12px",
-    "backgroundColor": "#F8F4FB",
+    "backgroundColor": CHART_BG,
     "boxShadow": "0 1px 4px rgba(0,0,0,0.04)",
+}
+
+GRAPH_CARD_STYLE = {
+    "backgroundColor": CHART_BG,
+    "border": "1px solid #E5E7EB",
+    "borderRadius": "12px",
+    "padding": "10px",
+    "boxShadow": "0 1px 6px rgba(15,23,42,0.04)",
 }
 
 
@@ -80,6 +100,8 @@ COL_OBS = "Observação"
 COL_CNPJ = "CNPJ"
 COL_DT_FUND = "dt_fundacao_osc"
 COL_FLORES = "Oferece Flores?"
+COL_ACOLHIMENTO = "Oferece acolhimento? (sim, não ou NI)"
+COL_ACOLHIMENTO_LEGACY = 'Oferece "acolhimento"? (sim, não ou NI)'
 COL_AUT_CULTIVO = "Possui autorização para cultivo?"
 COL_AUT_ENSINO_PESQUISA = "Associação de ensino e pesquisa"
 COL_ANO_FUND = "ano_fundacao"
@@ -94,6 +116,9 @@ SIM_VALS = {"sim", "s", "yes", "y"}
 NAO_VALS = {"não", "nao", "n", "no"}
 NI_VALS = {"ni", "n/i", "na", "n a", "não informado", "nao informado"}
 MP_VALS = {"mp", "m/p"}
+RESP_VALS = SIM_VALS | NAO_VALS | NI_VALS | MP_VALS | {"", "nan", "none"}
+SERVICE_CATEGORY_ORDER = ["sim", "não", "NI", "MP"]
+SERVICE_CATEGORY_LABELS = {"sim": "Sim", "não": "Não", "NI": "NI", "MP": "MP"}
 
 SERV_COLS = [
     "Distribuição de óleo à base de cannabis (sim, não ou NI)",
@@ -102,7 +127,7 @@ SERV_COLS = [
     "Possui algum outro produto para distribuição à base de cannabis? (sim, não ou NI)",
     "Oferece atendimento médico? (sim, não, NI ou MP)",
     "Oferece assistência jurídica? (sim, não ou NI)",
-    'Oferece "acolhimento"? (sim, não ou NI)',
+    COL_ACOLHIMENTO,
     "Oferece algum outro tipo de serviço? (sim, não ou NI)",
     COL_FLORES,
 ]
@@ -111,22 +136,43 @@ SERV_COLS = [
 # =========================================================
 # HELPERS VISUAIS
 # =========================================================
-def apply_plot_theme(fig, title_color="#6247AA", text_color="#2B193D",
-                     paper_bg="#F8F4FB", plot_bg="#F8F4FB"):
+def apply_plot_theme(fig, title_color=PRIMARY_PURPLE, text_color=CHART_TEXT,
+                     paper_bg=CHART_BG, plot_bg=CHART_BG):
     fig.update_layout(
-        font={"family": "Arial, Roboto, sans-serif", "color": text_color},
+        font={"family": "system-ui, Inter, Segoe UI, Arial, sans-serif", "color": text_color},
         title={
-            "font": {"color": title_color, "size": 20},
+            "font": {"color": title_color, "size": 18},
             "x": 0.5,
             "xanchor": "center"
         },
-        margin={"l": 10, "r": 10, "t": 60, "b": 10},
+        margin={"l": 28, "r": 24, "t": 58, "b": 34},
         paper_bgcolor=paper_bg,
         plot_bgcolor=plot_bg,
-        coloraxis_colorbar={
-            "tickfont": {"color": text_color},
-            "title": {"font": {"color": title_color}}
+        legend={
+            "font": {"color": CHART_MUTED, "size": 11},
+            "title": {"font": {"color": CHART_TEXT, "size": 11}},
         },
+        coloraxis_colorbar={
+            "tickfont": {"color": CHART_MUTED, "size": 11},
+            "title": {"font": {"color": title_color, "size": 12}},
+            "outlinewidth": 0,
+            "bgcolor": "rgba(255,255,255,0.72)"
+        },
+    )
+    fig.update_xaxes(
+        showgrid=True,
+        gridcolor=CHART_GRID,
+        zeroline=False,
+        linecolor="#E5E7EB",
+        tickfont={"color": CHART_MUTED, "size": 11},
+        title_font={"color": CHART_TEXT, "size": 12},
+    )
+    fig.update_yaxes(
+        showgrid=False,
+        zeroline=False,
+        linecolor="#E5E7EB",
+        tickfont={"color": CHART_MUTED, "size": 11},
+        title_font={"color": CHART_TEXT, "size": 12},
     )
     return fig
 
@@ -144,7 +190,7 @@ def blank_fig(msg: str):
             "xref": "paper",
             "yref": "paper",
             "showarrow": False,
-            "font": {"size": 14, "color": "#2B193D"}
+            "font": {"size": 14, "color": SECONDARY_TEXT}
         }]
     )
     return fig
@@ -153,17 +199,19 @@ def blank_fig(msg: str):
 def apply_map_background(fig, geo_bg=MAP_BG):
     fig.update_geos(
         showland=True,
-        landcolor="#F7F4FC",
+        landcolor="#FFFFFF",
         showocean=True,
         oceancolor=geo_bg,
         showlakes=True,
         lakecolor=geo_bg,
-        showcountries=False,
+        showcountries=True,
+        countrycolor="#CBD5E1",
+        countrywidth=0.8,
         showcoastlines=False,
         showframe=False,
         bgcolor=geo_bg,
-        subunitcolor="rgba(98,71,170,0.42)",
-        subunitwidth=1.2,
+        subunitcolor="#FFFFFF",
+        subunitwidth=1.0,
     )
     fig.update_layout(
         geo=dict(bgcolor=geo_bg),
@@ -171,7 +219,7 @@ def apply_map_background(fig, geo_bg=MAP_BG):
         plot_bgcolor=geo_bg,
         hoverlabel={
             "bgcolor": "white",
-            "font": {"color": "#2B193D"}
+            "font": {"color": SECONDARY_TEXT}
         },
         coloraxis_colorbar={
             "title": "Nº de associações",
@@ -327,6 +375,8 @@ def norm_resp(x):
         return "NI"
     s = str(x).strip().lower()
     s = s.replace(".", "").replace(";", "").replace(",", "")
+    if not s or s in {"nan", "none"}:
+        return "NI"
     if s in SIM_VALS:
         return "sim"
     if s in NAO_VALS:
@@ -335,7 +385,29 @@ def norm_resp(x):
         return "NI"
     if s in MP_VALS:
         return "MP"
-    return str(x).strip()
+    return "NI"
+
+
+def warn_unexpected_resp_values(d: pd.DataFrame, cols: list[str]):
+    for col in cols:
+        if col not in d.columns:
+            continue
+        vals = (
+            d[col]
+            .dropna()
+            .astype(str)
+            .str.strip()
+        )
+        norm_vals = (
+            vals
+            .str.lower()
+            .str.replace(".", "", regex=False)
+            .str.replace(";", "", regex=False)
+            .str.replace(",", "", regex=False)
+        )
+        unexpected = sorted(vals[~norm_vals.isin(RESP_VALS)].unique().tolist())
+        if unexpected:
+            print(f"AVISO: valores inesperados em {col}: {unexpected[:20]}")
 
 
 def is_found_link(x):
@@ -381,11 +453,26 @@ def shorten_service_label(label: str) -> str:
         "Possui algum outro produto para distribuição à base de cannabis? (sim, não ou NI)": "Outros produtos",
         "Oferece atendimento médico? (sim, não, NI ou MP)": "Atendimento médico",
         "Oferece assistência jurídica? (sim, não ou NI)": "Assistência jurídica",
-        'Oferece "acolhimento"? (sim, não ou NI)': "Acolhimento",
+        COL_ACOLHIMENTO: "Acolhimento",
+        COL_ACOLHIMENTO_LEGACY: "Acolhimento",
         "Oferece algum outro tipo de serviço? (sim, não ou NI)": "Outro serviço",
         "Oferece Flores?": "Oferece Flores",
     }
     return mapping.get(label, label)
+
+
+def service_filter_options():
+    options = []
+    seen = set()
+    for col in SERV_COLS:
+        if col not in df.columns or col in seen:
+            continue
+        label = shorten_service_label(col)
+        if strip_accents_lower(label) == "tambem":
+            continue
+        options.append({"label": label, "value": col})
+        seen.add(col)
+    return options
 
 
 def make_donut_from_counts(counts_df: pd.DataFrame, names_col: str, values_col: str, title: str):
@@ -396,22 +483,30 @@ def make_donut_from_counts(counts_df: pd.DataFrame, names_col: str, values_col: 
         counts_df,
         names=names_col,
         values=values_col,
-        hole=0.58,
+        hole=0.66,
         title=title,
         color_discrete_sequence=DONUT_PALETTE,
     )
     fig.update_traces(
         textposition="inside",
-        textinfo="percent+label",
-        textfont={"color": "white", "size": 13},
-        marker={"line": {"color": "#FBF9FF", "width": 2}},
-        hovertemplate="%{label}: %{value}<extra></extra>"
+        textinfo="percent",
+        textfont={"color": "white", "size": 12},
+        marker={"line": {"color": CHART_BG, "width": 2}},
+        hovertemplate="<b>%{label}</b><br>Nº: %{value}<br>%{percent}<extra></extra>"
     )
     fig.update_layout(
-        paper_bgcolor="#F8F4FB",
-        plot_bgcolor="#F8F4FB",
+        paper_bgcolor=CHART_BG,
+        plot_bgcolor=CHART_BG,
         legend_title_text="",
-        margin={"l": 10, "r": 10, "t": 60, "b": 10},
+        legend={
+            "orientation": "h",
+            "yanchor": "top",
+            "y": -0.08,
+            "xanchor": "center",
+            "x": 0.5,
+            "font": {"size": 10, "color": CHART_MUTED},
+        },
+        margin={"l": 14, "r": 14, "t": 58, "b": 54},
     )
     return apply_plot_theme(fig)
 
@@ -549,6 +644,9 @@ if missing:
         f"Colunas disponíveis: {list(df.columns)}"
     )
 
+if COL_ACOLHIMENTO_LEGACY in df.columns and COL_ACOLHIMENTO not in df.columns:
+    df[COL_ACOLHIMENTO] = df[COL_ACOLHIMENTO_LEGACY]
+
 
 UF_SIGLA = {
     "Acre":"AC","Alagoas":"AL","Amapá":"AP","Amazonas":"AM","Bahia":"BA","Ceará":"CE",
@@ -558,6 +656,7 @@ UF_SIGLA = {
     "Rio Grande do Norte":"RN","Rio Grande do Sul":"RS","Rondônia":"RO","Roraima":"RR",
     "Santa Catarina":"SC","São Paulo":"SP","Sergipe":"SE","Tocantins":"TO"
 }
+UF_NOME_POR_SIGLA = {sigla: nome for nome, sigla in UF_SIGLA.items()}
 
 uf_raw = df[COL_UF].astype(str).str.strip()
 uf_raw = uf_raw.replace({
@@ -595,6 +694,8 @@ if serv_cols_disponiveis:
 else:
     df[COL_ASSOC_VERIF] = False
 df[COL_STATUS_VERIF] = df[COL_ASSOC_VERIF].map({True: "Verificada", False: "Não verificada"})
+
+warn_unexpected_resp_values(df, SERV_COLS + AUTORIZACAO_COLS)
 
 for c in SERV_COLS:
     if c in df.columns:
@@ -769,7 +870,7 @@ app.layout = html.Div([
                 html.H4("Serviços / Produtos (mostrar apenas quem tem)"),
                 dcc.Checklist(
                     id="f-servicos",
-                    options=[{"label": shorten_service_label(c), "value": c} for c in SERV_COLS if c in df.columns],
+                    options=service_filter_options(),
                     value=[],
                     style={"display": "grid", "gap": "6px"}
                 ),
@@ -803,14 +904,14 @@ app.layout = html.Div([
                             target="_blank",
                             style={
                                 "display": "block",
-                                "backgroundColor": "#6247AA",
+                                "backgroundColor": PRIMARY_PURPLE,
                                 "color": "white",
                                 "padding": "11px 12px",
                                 "borderRadius": "10px",
                                 "textDecoration": "none",
                                 "fontSize": "13px",
                                 "fontWeight": "700",
-                                "boxShadow": "0 4px 12px rgba(98,71,170,0.16)"
+                                "boxShadow": f"0 4px 12px {PRIMARY_PURPLE_SHADOW}"
                             }
                         ),
                         html.A(
@@ -819,10 +920,10 @@ app.layout = html.Div([
                             target="_blank",
                             style={
                                 "display": "block",
-                                "backgroundColor": "#F8F4FB",
-                                "color": "#6247AA",
+                                "backgroundColor": "#FBF7FA",
+                                "color": PRIMARY_PURPLE,
                                 "padding": "11px 12px",
-                                "border": "1px solid #CFC3F2",
+                                "border": f"1px solid {PRIMARY_PURPLE_BORDER}",
                                 "borderRadius": "10px",
                                 "textDecoration": "none",
                                 "fontSize": "13px",
@@ -835,10 +936,10 @@ app.layout = html.Div([
                             target="_blank",
                             style={
                                 "display": "block",
-                                "backgroundColor": "#F8F4FB",
-                                "color": "#6247AA",
+                                "backgroundColor": "#FBF7FA",
+                                "color": PRIMARY_PURPLE,
                                 "padding": "11px 12px",
-                                "border": "1px solid #CFC3F2",
+                                "border": f"1px solid {PRIMARY_PURPLE_BORDER}",
                                 "borderRadius": "10px",
                                 "textDecoration": "none",
                                 "fontSize": "13px",
@@ -847,11 +948,11 @@ app.layout = html.Div([
                         ),
                     ], style={"display": "grid", "gap": "8px"})
                 ], style={
-                    "backgroundColor": "#F4EEFF",
-                    "border": "1px solid #DEC9E9",
+                    "backgroundColor": PRIMARY_PURPLE_SOFT,
+                    "border": f"1px solid {PRIMARY_PURPLE_BORDER}",
                     "padding": "12px",
                     "borderRadius": "14px",
-                    "boxShadow": "0 6px 18px rgba(98,71,170,0.08)",
+                    "boxShadow": f"0 6px 18px {PRIMARY_PURPLE_SHADOW_SOFT}",
                     "marginTop": "10px",
                     "marginBottom": "8px"
                 }),
@@ -886,16 +987,16 @@ app.layout = html.Div([
                     html.Div(
                         dcc.Graph(
                             id="mapa",
-                            style={"height": "65vh", "backgroundColor": "#EEEAF3", "borderRadius": "12px"},
+                            style={"height": "65vh", "backgroundColor": MAP_BG, "borderRadius": "12px"},
                             config={"displayModeBar": False}
                         ),
                         className="map-panel",
                         style={
-                            "backgroundColor": "#EEEAF3",
-                            "border": "1px solid #CFC3F2",
+                            "backgroundColor": MAP_BG,
+                            "border": f"1px solid {PRIMARY_PURPLE_BORDER}",
                             "borderRadius": "16px",
                             "padding": "8px",
-                            "boxShadow": "0 8px 20px rgba(98,71,170,0.10)",
+                            "boxShadow": "0 8px 20px rgba(15,23,42,0.08)",
                             "marginTop": "8px"
                         }
                     ),
@@ -909,7 +1010,7 @@ app.layout = html.Div([
                         style={
                             "width": "100%",
                             "padding": "10px 12px",
-                            "border": "1px solid #DEC9E9",
+                            "border": f"1px solid {PRIMARY_PURPLE_BORDER}",
                             "borderRadius": "10px",
                             "marginTop": "12px",
                             "marginBottom": "8px",
@@ -930,7 +1031,7 @@ app.layout = html.Div([
                                     "filter_query": f"{{{COL_STATUS_VERIF}}} = \"Verificada\"",
                                     "column_id": COL_NOME
                                 },
-                                "color": "#6247AA",
+                                "color": PRIMARY_PURPLE,
                                 "fontWeight": "700"
                             }
                         ],
@@ -941,26 +1042,26 @@ app.layout = html.Div([
 
                 dcc.Tab(label="Estatísticas", children=[
                     html.Div([
-                        html.Div(dcc.Graph(id="rank-mun"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="linha-fundacao"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rank-mun"), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="linha-fundacao"), style=GRAPH_CARD_STYLE),
                     ], style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "12px", "marginTop": "8px"}),
 
                     html.Div([
-                        html.Div(dcc.Graph(id="rosca-cnpj"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-presenca-digital"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rosca-cnpj"), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-presenca-digital"), style=GRAPH_CARD_STYLE),
                     ], style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "12px", "marginTop": "12px"}),
 
-                    html.H4("Serviços e produtos", style={"marginTop": "18px", "marginBottom": "8px", "color": "#6247AA"}),
+                    html.H4("Serviços e produtos", style={"marginTop": "18px", "marginBottom": "8px", "color": PRIMARY_PURPLE}),
                     html.Div([
-                        html.Div(dcc.Graph(id="rosca-serv-0"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-1"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-2"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-3"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-4"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-5"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-6"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-7"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
-                        html.Div(dcc.Graph(id="rosca-serv-8"), style={"backgroundColor": "#F8F4FB", "border": "1px solid #DEC9E9", "borderRadius": "14px", "padding": "8px"}),
+                        html.Div(dcc.Graph(id="rosca-serv-0"), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-1"), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-2"), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-3"), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-4"), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-5"), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-6"), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-7"), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-8"), style=GRAPH_CARD_STYLE),
                     ], style={"display": "grid", "gridTemplateColumns": "repeat(2, minmax(280px, 1fr))", "gap": "12px", "marginTop": "8px", "marginBottom": "12px"}),
                 ]),
 
@@ -1038,6 +1139,25 @@ def apply_name_search(d, termo):
     return d.loc[mask].copy()
 
 
+def dropdown_value_for_uf_sigla(uf_sigla):
+    uf_sigla = str(uf_sigla or "").strip().upper()
+    if uf_sigla not in set(UF_SIGLA.values()):
+        return None
+
+    if uf_sigla in uf_opts:
+        return uf_sigla
+
+    uf_nome = UF_NOME_POR_SIGLA.get(uf_sigla)
+    if uf_nome in uf_opts:
+        return uf_nome
+
+    for uf_opt in uf_opts:
+        if UF_SIGLA.get(str(uf_opt).strip(), str(uf_opt).strip().upper()) == uf_sigla:
+            return uf_opt
+
+    return None
+
+
 @app.callback(
     Output("store-filtered-data", "data"),
     Input("f-uf", "value"),
@@ -1087,6 +1207,39 @@ def filter_data(f_uf, f_mun, f_verificacao, f_cnpj, f_aut_cultivo, f_aut_ensino_
             mask &= df[c].isin(["sim"])
 
     return df.index[mask].tolist()
+
+
+@app.callback(
+    Output("f-uf", "value", allow_duplicate=True),
+    Input("mapa", "clickData"),
+    State("f-uf", "value"),
+    prevent_initial_call=True,
+)
+def select_uf_from_map_click(click_data, f_uf_atual):
+    if not click_data:
+        return no_update
+
+    points = click_data.get("points") or []
+    if not points:
+        return no_update
+
+    point = points[0]
+    uf_clicada = point.get("location")
+
+    if not uf_clicada:
+        customdata = point.get("customdata") or []
+        if customdata:
+            uf_clicada = customdata[0]
+
+    uf_dropdown_value = dropdown_value_for_uf_sigla(uf_clicada)
+    if not uf_dropdown_value:
+        return no_update
+
+    f_uf_atual = f_uf_atual or []
+    if len(f_uf_atual) == 1 and f_uf_atual[0] == uf_dropdown_value:
+        return no_update
+
+    return [uf_dropdown_value]
 
 
 @app.callback(
@@ -1205,8 +1358,8 @@ def update_map(json_data, f_uf, busca_nome):
                         )
 
                         fig_mapa.update_traces(
-                            marker_line_color="rgba(98,71,170,0.45)",
-                            marker_line_width=0.65
+                            marker_line_color="#FFFFFF",
+                            marker_line_width=0.75
                         )
                         fig_mapa.update_geos(
                             fitbounds="locations",
@@ -1247,19 +1400,20 @@ def update_map(json_data, f_uf, busca_nome):
                     featureidkey="properties.sigla",
                     color="n",
                     hover_name="UF_nome",
+                    custom_data=["uf_sigla"],
                     title="Distribuição de associações por UF",
                     color_continuous_scale=PURPLE_SCALE,
                 )
                 fig_mapa.update_traces(
-                    marker_line_color="rgba(98,71,170,0.78)",
-                    marker_line_width=1.35,
+                    marker_line_color="#FFFFFF",
+                    marker_line_width=1.05,
                     hovertemplate="<b>%{hovertext}</b><br>Nº de associações: %{z}<extra></extra>"
                 )
                 fig_mapa.update_geos(
                     visible=False,
                     bgcolor=MAP_BG,
-                    center={"lat": -14.5, "lon": -52.0},
-                    projection_scale=3.8
+                    center={"lat": -14.2, "lon": -52.8},
+                    projection_scale=4.25
                 )
                 fig_mapa = apply_map_background(fig_mapa, geo_bg=MAP_BG)
                 fig_mapa = apply_plot_theme(fig_mapa, paper_bg=MAP_BG, plot_bg=MAP_BG)
@@ -1314,7 +1468,7 @@ def update_map(json_data, f_uf, busca_nome):
                     "filter_query": f"{{{COL_STATUS_VERIF}}} = \"Verificada\"",
                     "column_id": COL_NOME
                 },
-                "color": "#6247AA",
+                "color": PRIMARY_PURPLE,
                 "fontWeight": "700"
             }
         ]
@@ -1359,10 +1513,26 @@ def update_main_stats(json_data):
                 orientation="h",
                 title="Top 20 municípios por número de associações",
                 color="n",
-                color_continuous_scale=PURPLE_SCALE,
+                color_continuous_scale=CHART_PURPLE_SCALE,
+                text="n",
             )
-            fig_mun.update_layout(coloraxis_showscale=False, paper_bgcolor="#F8F4FB", plot_bgcolor="#F8F4FB")
+            fig_mun.update_traces(
+                textposition="outside",
+                textfont={"color": CHART_TEXT, "size": 11},
+                marker_line_width=0,
+                cliponaxis=False,
+                hovertemplate="<b>%{y}</b><br>Nº de associações: %{x}<extra></extra>",
+            )
+            fig_mun.update_layout(
+                coloraxis_showscale=False,
+                paper_bgcolor=CHART_BG,
+                plot_bgcolor=CHART_BG,
+                xaxis_title="Nº de associações",
+                yaxis_title="",
+            )
             fig_mun = apply_plot_theme(fig_mun)
+            fig_mun.update_layout(margin={"l": 150, "r": 42, "t": 58, "b": 34})
+            fig_mun.update_yaxes(autorange="reversed")
         else:
             fig_mun = blank_fig("Ranking de municípios indisponível.")
     except Exception as e:
@@ -1382,14 +1552,24 @@ def update_main_stats(json_data):
                 markers=True,
                 title="Linha do tempo das fundações por ano",
             )
-            fig_fund.update_traces(line={"width": 3}, marker={"size": 9})
+            fig_fund.update_traces(
+                line={"width": 3.5, "color": PRIMARY_PURPLE},
+                marker={
+                    "size": 7,
+                    "color": PRIMARY_PURPLE,
+                    "line": {"color": CHART_BG, "width": 1.5},
+                },
+                hovertemplate="<b>%{x}</b><br>Nº de associações: %{y}<extra></extra>",
+            )
             fig_fund.update_layout(
                 xaxis_title="Ano de fundação",
                 yaxis_title="Nº de associações",
-                paper_bgcolor="#F8F4FB",
-                plot_bgcolor="#F8F4FB",
+                paper_bgcolor=CHART_BG,
+                plot_bgcolor=CHART_BG,
             )
             fig_fund = apply_plot_theme(fig_fund)
+            fig_fund.update_xaxes(showgrid=False)
+            fig_fund.update_yaxes(showgrid=True, gridcolor=CHART_GRID)
         else:
             fig_fund = blank_fig("Linha do tempo das fundações indisponível para o recorte atual.")
     except Exception as e:
@@ -1448,11 +1628,15 @@ def update_service_charts(json_data):
                     .astype(str)
                     .str.strip()
                     .replace("", "NI")
+                    .apply(norm_resp)
+                    .loc[lambda s: s.isin(SERVICE_CATEGORY_ORDER)]
                     .value_counts()
+                    .reindex(SERVICE_CATEGORY_ORDER, fill_value=0)
+                    .loc[lambda s: s > 0]
                     .rename_axis("categoria")
                     .reset_index(name="n")
                 )
-                serv_df["categoria"] = serv_df["categoria"].replace({"sim": "Sim", "não": "Não", "NI": "NI", "MP": "MP"})
+                serv_df["categoria"] = serv_df["categoria"].replace(SERVICE_CATEGORY_LABELS)
                 fig_serv = make_donut_from_counts(serv_df, "categoria", "n", shorten_service_label(serv_col))
             else:
                 fig_serv = blank_fig(f"{shorten_service_label(serv_col)}: coluna indisponível.")
