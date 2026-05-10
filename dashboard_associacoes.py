@@ -684,7 +684,7 @@ app.layout = html.Div([
         html.Div([
 
             html.Div([
-                html.H1("Associações Cannábicas — Mapannabis", className="brand-title"),
+                html.H1("Mapa das Associações Canabicas", className="brand-title"),
                 html.P("Fontes: dados Psicocult INCT-InEAC e Fiocruz", className="brand-subtitle")
             ], className="brand-text"),
 
