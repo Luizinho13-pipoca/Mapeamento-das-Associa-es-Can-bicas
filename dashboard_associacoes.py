@@ -24,23 +24,12 @@ import plotly.graph_objects as go
 DATA_SOURCE = "https://docs.google.com/spreadsheets/d/1bjZZikmlSxozqXgsR9Stm4UXnQKX3zpK/edit?usp=sharing&ouid=116222672595798367643&rtpof=true&sd=true"
 
 FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdZJ3ARpU9ej_xyanT2wfWyotBC_WMY_jsZhRgRRXmzuLylew/viewform"
+FORM_VALIDACAO_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdxIgof5J5H1xsPgOpaBnHuf4zR3o0sgphSKBN_KyflIE2D0A/viewform?usp=publish-editor"
+FORM_SUGESTOES_URL = "https://docs.google.com/forms/d/e/1FAIpQLSenUuXpGgRz52rkvJ8uIge_T8u-PBJLC4MwWL-S__ge6hBAow/viewform?usp=header"
 
 REQUEST_HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; DashRenderBot/1.0)"
 }
-
-PALETTE = [
-    "#DEC9E9",
-    "#DAC3E8",
-    "#D2B7E5",
-    "#C19EE0",
-    "#B185DB",
-    "#A06CD5",
-    "#9163CB",
-    "#815AC0",
-    "#7251B5",
-    "#6247AA",
-]
 
 DONUT_PALETTE = [
     "#6247AA",
@@ -93,7 +82,18 @@ COL_DT_FUND = "dt_fundacao_osc"
 COL_FLORES = "Oferece Flores?"
 COL_AUT_CULTIVO = "Possui autorização para cultivo?"
 COL_AUT_ENSINO_PESQUISA = "Associação de ensino e pesquisa"
+COL_ANO_FUND = "ano_fundacao"
+COL_TEM_CNPJ = "tem_cnpj"
+COL_TEM_IG = "tem_instagram"
+COL_TEM_SITE = "tem_site"
+COL_ASSOC_VERIF = "associacao_verificada"
+COL_STATUS_VERIF = "status_verificacao"
 AUTORIZACAO_COLS = [COL_AUT_CULTIVO, COL_AUT_ENSINO_PESQUISA]
+
+SIM_VALS = {"sim", "s", "yes", "y"}
+NAO_VALS = {"não", "nao", "n", "no"}
+NI_VALS = {"ni", "n/i", "na", "n a", "não informado", "nao informado"}
+MP_VALS = {"mp", "m/p"}
 
 SERV_COLS = [
     "Distribuição de óleo à base de cannabis (sim, não ou NI)",
@@ -327,13 +327,13 @@ def norm_resp(x):
         return "NI"
     s = str(x).strip().lower()
     s = s.replace(".", "").replace(";", "").replace(",", "")
-    if s in ["sim", "s", "yes", "y"]:
+    if s in SIM_VALS:
         return "sim"
-    if s in ["não", "nao", "n", "no"]:
+    if s in NAO_VALS:
         return "não"
-    if s in ["ni", "n/i", "na", "n a", "não informado", "nao informado"]:
+    if s in NI_VALS:
         return "NI"
-    if s in ["mp", "m/p"]:
+    if s in MP_VALS:
         return "MP"
     return str(x).strip()
 
@@ -351,9 +351,9 @@ def is_checked_service_value(x):
     if pd.isna(x):
         return False
     s = str(x).strip().lower()
-    if not s or s in ["nan", "none", "ni", "n/i", "na", "n a", "não informado", "nao informado"]:
+    if not s or s in {"nan", "none"} | NI_VALS:
         return False
-    return s in ["sim", "s", "yes", "y", "não", "nao", "n", "no", "mp", "m/p"]
+    return s in SIM_VALS | NAO_VALS | MP_VALS
 
 
 def compute_verificada_flag(row: pd.Series, service_cols: list[str]) -> bool:
@@ -591,12 +591,10 @@ if serv_cols_disponiveis:
             .str.replace(",", "", regex=False)
         ))
     )
-    df["associacao_verificada"] = serv_norm.isin(
-        ["sim", "s", "yes", "y", "n\u00e3o", "nao", "n", "no", "mp", "m/p"]
-    ).any(axis=1)
+    df[COL_ASSOC_VERIF] = serv_norm.isin(SIM_VALS | NAO_VALS | MP_VALS).any(axis=1)
 else:
-    df["associacao_verificada"] = False
-df["status_verificacao"] = df["associacao_verificada"].map({True: "Verificada", False: "Não verificada"})
+    df[COL_ASSOC_VERIF] = False
+df[COL_STATUS_VERIF] = df[COL_ASSOC_VERIF].map({True: "Verificada", False: "Não verificada"})
 
 for c in SERV_COLS:
     if c in df.columns:
@@ -606,9 +604,9 @@ for c in AUTORIZACAO_COLS:
     if c in df.columns:
         df[c] = df[c].apply(norm_resp)
 
-df["tem_instagram"] = df[COL_INSTAGRAM].apply(is_found_link) if COL_INSTAGRAM in df.columns else False
-df["tem_site"] = df[COL_SITE].apply(is_found_link) if COL_SITE in df.columns else False
-df["tem_cnpj"] = (
+df[COL_TEM_IG] = df[COL_INSTAGRAM].apply(is_found_link) if COL_INSTAGRAM in df.columns else False
+df[COL_TEM_SITE] = df[COL_SITE].apply(is_found_link) if COL_SITE in df.columns else False
+df[COL_TEM_CNPJ] = (
     safe_col(df, COL_CNPJ)
     .astype(str)
     .str.strip()
@@ -619,10 +617,10 @@ df["tem_cnpj"] = (
 
 if COL_DT_FUND in df.columns:
     df["dt_fundacao_parsed"] = parse_mixed_date(df[COL_DT_FUND])
-    df["ano_fundacao"] = df["dt_fundacao_parsed"].dt.year
+    df[COL_ANO_FUND] = df["dt_fundacao_parsed"].dt.year
 else:
     df["dt_fundacao_parsed"] = pd.NaT
-    df["ano_fundacao"] = pd.NA
+    df[COL_ANO_FUND] = pd.NA
 
 df["_nome_norm"] = safe_col(df, COL_NOME).fillna("").astype(str).apply(strip_accents_lower)
 df["_sigla_norm"] = safe_col(df, COL_SIGLA).fillna("").astype(str).apply(strip_accents_lower)
@@ -760,7 +758,7 @@ app.layout = html.Div([
                     html.Br(),
                     html.Label("Ensino e pesquisa"),
                     dcc.Dropdown(
-                        id="f-aut-cultivo-2",
+                        id="f-aut-ensino-pesquisa",
                         options=dropdown_options_for_resp_col(COL_AUT_ENSINO_PESQUISA),
                         value="todas",
                         clearable=False,
@@ -785,48 +783,83 @@ app.layout = html.Div([
                     ],
                     value=[]
                 ),
+
+                html.Hr(),
+                html.Div([
+                    html.H4("Contribua com o mapa", style={"marginBottom": "6px"}),
+                    html.Div(
+                        "Ajude a manter o mapeamento atualizado, colaborativo e público.",
+                        style={
+                            "fontSize": "12px",
+                            "opacity": 0.85,
+                            "lineHeight": "1.4",
+                            "marginBottom": "10px"
+                        }
+                    ),
+                    html.Div([
+                        html.A(
+                            "Indicar associação",
+                            href=FORM_URL,
+                            target="_blank",
+                            style={
+                                "display": "block",
+                                "backgroundColor": "#6247AA",
+                                "color": "white",
+                                "padding": "11px 12px",
+                                "borderRadius": "10px",
+                                "textDecoration": "none",
+                                "fontSize": "13px",
+                                "fontWeight": "700",
+                                "boxShadow": "0 4px 12px rgba(98,71,170,0.16)"
+                            }
+                        ),
+                        html.A(
+                            "Validar/atualizar dados",
+                            href=FORM_VALIDACAO_URL,
+                            target="_blank",
+                            style={
+                                "display": "block",
+                                "backgroundColor": "#F8F4FB",
+                                "color": "#6247AA",
+                                "padding": "11px 12px",
+                                "border": "1px solid #CFC3F2",
+                                "borderRadius": "10px",
+                                "textDecoration": "none",
+                                "fontSize": "13px",
+                                "fontWeight": "700"
+                            }
+                        ),
+                        html.A(
+                            "Enviar sugestão",
+                            href=FORM_SUGESTOES_URL,
+                            target="_blank",
+                            style={
+                                "display": "block",
+                                "backgroundColor": "#F8F4FB",
+                                "color": "#6247AA",
+                                "padding": "11px 12px",
+                                "border": "1px solid #CFC3F2",
+                                "borderRadius": "10px",
+                                "textDecoration": "none",
+                                "fontSize": "13px",
+                                "fontWeight": "700"
+                            }
+                        ),
+                    ], style={"display": "grid", "gap": "8px"})
+                ], style={
+                    "backgroundColor": "#F4EEFF",
+                    "border": "1px solid #DEC9E9",
+                    "padding": "12px",
+                    "borderRadius": "14px",
+                    "boxShadow": "0 6px 18px rgba(98,71,170,0.08)",
+                    "marginTop": "10px",
+                    "marginBottom": "8px"
+                }),
             ], style={
                 "overflowY": "auto",
                 "paddingRight": "6px",
                 "flex": "1 1 auto",
                 "minHeight": 0
-            }),
-
-            html.Div([
-                html.H5("Contribua com o mapeamento (Psicocult/Fiocruz)"),
-                html.Div(
-                    "Conhece uma associação de pacientes que ainda não está no painel? "
-                    "Envie as informações pelo formulário abaixo para integrar o banco de dados da pesquisa.",
-                    style={"fontSize": "12px", "opacity": 0.9, "marginTop": "6px", "lineHeight": "1.4"}
-                ),
-                html.A(
-                    "➜ Indicar associação",
-                    href=FORM_URL,
-                    target="_blank",
-                    style={
-                        "backgroundColor": "#6247AA",
-                        "color": "white",
-                        "padding": "10px 12px",
-                        "borderRadius": "8px",
-                        "textDecoration": "none",
-                        "fontSize": "13px",
-                        "fontWeight": "bold",
-                        "display": "inline-block",
-                        "marginTop": "10px"
-                    }
-                ),
-                html.Div(
-                    "As informações enviadas passam por verificação antes de serem incorporadas ao mapeamento.",
-                    style={"fontSize": "11px", "color": "#555", "marginTop": "8px", "lineHeight": "1.3"}
-                )
-            ], style={
-                "backgroundColor": "#F4EEFF",
-                "border": "1px solid #DEC9E9",
-                "padding": "12px",
-                "borderRadius": "14px",
-                "boxShadow": "0 6px 18px rgba(98,71,170,0.08)",
-                "marginTop": "10px",
-                "flex": "0 0 auto"
             }),
 
             html.Div(style={"height": "4px"}),
@@ -894,14 +927,14 @@ app.layout = html.Div([
                         style_data_conditional=[
                             {
                                 "if": {
-                                    "filter_query": "{status_verificacao} = \"Verificada\"",
+                                    "filter_query": f"{{{COL_STATUS_VERIF}}} = \"Verificada\"",
                                     "column_id": COL_NOME
                                 },
                                 "color": "#6247AA",
                                 "fontWeight": "700"
                             }
                         ],
-                        hidden_columns=["status_verificacao"],
+                        hidden_columns=[COL_STATUS_VERIF],
                         markdown_options={"link_target": "_blank"},
                     ),
                 ]),
@@ -991,16 +1024,16 @@ def apply_name_search(d, termo):
         if norm_col in d.columns:
             col_norm = d[norm_col].fillna("").astype(str)
             mask |= col_norm.str.contains(termo_norm, regex=False, na=False)
-            continue
-        if col not in d.columns:
-            continue
-        col_norm = (
-            d[col]
-            .fillna("")
-            .astype(str)
-            .apply(strip_accents_lower)
-        )
-        mask |= col_norm.str.contains(termo_norm, regex=False, na=False)
+        else:
+            if col not in d.columns:
+                continue
+            col_norm = (
+                d[col]
+                .fillna("")
+                .astype(str)
+                .apply(strip_accents_lower)
+            )
+            mask |= col_norm.str.contains(termo_norm, regex=False, na=False)
 
     return d.loc[mask].copy()
 
@@ -1012,11 +1045,11 @@ def apply_name_search(d, termo):
     Input("f-verificacao", "value"),
     Input("f-cnpj", "value"),
     Input("f-aut-cultivo", "value"),
-    Input("f-aut-cultivo-2", "value"),
+    Input("f-aut-ensino-pesquisa", "value"),
     Input("f-servicos", "value"),
     Input("f-links", "value"),
 )
-def filter_data(f_uf, f_mun, f_verificacao, f_cnpj, f_aut_cultivo, f_aut_cultivo_2, f_serv, f_links):
+def filter_data(f_uf, f_mun, f_verificacao, f_cnpj, f_aut_cultivo, f_aut_ensino_pesquisa, f_serv, f_links):
     mask = pd.Series(True, index=df.index)
 
     if f_uf:
@@ -1025,25 +1058,25 @@ def filter_data(f_uf, f_mun, f_verificacao, f_cnpj, f_aut_cultivo, f_aut_cultivo
         mask &= as_stripped(safe_col(df, COL_MUN)).isin([str(x).strip() for x in f_mun])
 
     if f_verificacao == "verificadas":
-        mask &= df["associacao_verificada"]
+        mask &= df[COL_ASSOC_VERIF]
     elif f_verificacao == "nao_verificadas":
-        mask &= ~df["associacao_verificada"]
+        mask &= ~df[COL_ASSOC_VERIF]
 
     if f_cnpj == "com_cnpj":
-        mask &= df["tem_cnpj"]
+        mask &= df[COL_TEM_CNPJ]
     elif f_cnpj == "sem_cnpj":
-        mask &= ~df["tem_cnpj"]
+        mask &= ~df[COL_TEM_CNPJ]
 
     if f_aut_cultivo and f_aut_cultivo != "todas" and COL_AUT_CULTIVO in df.columns:
         mask &= df[COL_AUT_CULTIVO] == f_aut_cultivo
-    if f_aut_cultivo_2 and f_aut_cultivo_2 != "todas" and COL_AUT_ENSINO_PESQUISA in df.columns:
-        mask &= df[COL_AUT_ENSINO_PESQUISA] == f_aut_cultivo_2
+    if f_aut_ensino_pesquisa and f_aut_ensino_pesquisa != "todas" and COL_AUT_ENSINO_PESQUISA in df.columns:
+        mask &= df[COL_AUT_ENSINO_PESQUISA] == f_aut_ensino_pesquisa
 
     if f_links:
         if "ig" in f_links:
-            mask &= df["tem_instagram"]
+            mask &= df[COL_TEM_IG]
         if "site" in f_links:
-            mask &= df["tem_site"]
+            mask &= df[COL_TEM_SITE]
 
     for c in (f_serv or []):
         if c not in df.columns:
@@ -1071,7 +1104,7 @@ def update_kpis(json_data):
         d[COL_MUN].dropna().astype(str).str.strip().replace("", pd.NA).dropna().nunique()
         if COL_MUN in d.columns else 0
     )
-    pct_cnpj = (d["tem_cnpj"].mean() * 100) if total else 0
+    pct_cnpj = (d[COL_TEM_CNPJ].mean() * 100) if total else 0
 
     return [
         html.Div([html.Div("Associações", style={"opacity": 0.7}),
@@ -1238,7 +1271,7 @@ def update_map(json_data, f_uf, busca_nome):
 
     try:
         d_list_source = apply_name_search(d, busca_nome)
-        base_cols = [c for c in [COL_NOME, COL_SIGLA, COL_UF, COL_MUN, "status_verificacao"] if c in d_list_source.columns]
+        base_cols = [c for c in [COL_NOME, COL_SIGLA, COL_UF, COL_MUN, COL_STATUS_VERIF] if c in d_list_source.columns]
         pull_cols = base_cols[:]
         if COL_INSTAGRAM in d_list_source.columns:
             pull_cols.append(COL_INSTAGRAM)
@@ -1251,7 +1284,7 @@ def update_map(json_data, f_uf, busca_nome):
             d_list["Instagram"] = d_list[COL_INSTAGRAM].apply(lambda x: make_md_link(x, "Instagram")) if COL_INSTAGRAM in d_list.columns else ""
             d_list["Site"] = d_list[COL_SITE].apply(lambda x: make_md_link(x, "Site")) if COL_SITE in d_list.columns else ""
 
-            show_cols = [c for c in [COL_NOME, COL_SIGLA, COL_UF, COL_MUN, "Instagram", "Site", "status_verificacao"] if c in d_list.columns]
+            show_cols = [c for c in [COL_NOME, COL_SIGLA, COL_UF, COL_MUN, "Instagram", "Site", COL_STATUS_VERIF] if c in d_list.columns]
             d_list = d_list[show_cols].copy()
 
             if COL_NOME in d_list.columns:
@@ -1278,7 +1311,7 @@ def update_map(json_data, f_uf, busca_nome):
         lista_style_data_conditional = [
             {
                 "if": {
-                    "filter_query": "{status_verificacao} = \"Verificada\"",
+                    "filter_query": f"{{{COL_STATUS_VERIF}}} = \"Verificada\"",
                     "column_id": COL_NOME
                 },
                 "color": "#6247AA",
@@ -1337,14 +1370,14 @@ def update_main_stats(json_data):
         fig_mun = blank_fig(f"Ranking municípios (erro): {type(e).__name__}")
 
     try:
-        fund = d[["ano_fundacao"]].copy() if "ano_fundacao" in d.columns else pd.DataFrame()
+        fund = d[[COL_ANO_FUND]].copy() if COL_ANO_FUND in d.columns else pd.DataFrame()
         fund = fund.dropna()
         if not fund.empty:
-            fund["ano_fundacao"] = fund["ano_fundacao"].astype(int)
-            fund = fund.groupby("ano_fundacao").size().reset_index(name="n").sort_values("ano_fundacao")
+            fund[COL_ANO_FUND] = fund[COL_ANO_FUND].astype(int)
+            fund = fund.groupby(COL_ANO_FUND).size().reset_index(name="n").sort_values(COL_ANO_FUND)
             fig_fund = px.line(
                 fund,
-                x="ano_fundacao",
+                x=COL_ANO_FUND,
                 y="n",
                 markers=True,
                 title="Linha do tempo das fundações por ano",
@@ -1364,7 +1397,7 @@ def update_main_stats(json_data):
         fig_fund = blank_fig(f"Linha do tempo (erro): {type(e).__name__}")
 
     try:
-        tem_cnpj_series = d["tem_cnpj"] if "tem_cnpj" in d.columns else pd.Series([False] * len(d), index=d.index)
+        tem_cnpj_series = d[COL_TEM_CNPJ] if COL_TEM_CNPJ in d.columns else pd.Series([False] * len(d), index=d.index)
         cnpj_counts = pd.DataFrame({
             "categoria": ["Com CNPJ", "Sem CNPJ"],
             "n": [int(tem_cnpj_series.sum()), int((~tem_cnpj_series).sum())]
@@ -1376,12 +1409,12 @@ def update_main_stats(json_data):
 
     try:
         presenca = pd.Series("Nenhum", index=d.index)
-        if "tem_instagram" in d.columns and "tem_site" in d.columns:
+        if COL_TEM_IG in d.columns and COL_TEM_SITE in d.columns:
             presenca = pd.Series(index=d.index, dtype=object)
-            presenca[(d["tem_instagram"]) & (d["tem_site"])] = "Instagram + Site"
-            presenca[(d["tem_instagram"]) & (~d["tem_site"])] = "Só Instagram"
-            presenca[(~d["tem_instagram"]) & (d["tem_site"])] = "Só Site"
-            presenca[(~d["tem_instagram"]) & (~d["tem_site"])] = "Nenhum"
+            presenca[(d[COL_TEM_IG]) & (d[COL_TEM_SITE])] = "Instagram + Site"
+            presenca[(d[COL_TEM_IG]) & (~d[COL_TEM_SITE])] = "Só Instagram"
+            presenca[(~d[COL_TEM_IG]) & (d[COL_TEM_SITE])] = "Só Site"
+            presenca[(~d[COL_TEM_IG]) & (~d[COL_TEM_SITE])] = "Nenhum"
         pres_df = presenca.value_counts(dropna=False).rename_axis("categoria").reset_index(name="n")
         fig_presenca = make_donut_from_counts(pres_df, "categoria", "n", "Presença digital")
     except Exception as e:
@@ -1442,7 +1475,7 @@ def update_table(json_data, busca_nome):
     d = apply_name_search(d, busca_nome)
     table_cols = [
         c for c in [
-            COL_ID, COL_NOME, COL_SIGLA, COL_UF, COL_MUN, "tem_instagram", "tem_site",
+            COL_ID, COL_NOME, COL_SIGLA, COL_UF, COL_MUN, COL_TEM_IG, COL_TEM_SITE,
             *[c for c in SERV_COLS if c in d.columns],
             *[c for c in AUTORIZACAO_COLS if c in d.columns],
             COL_OBS
