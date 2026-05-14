@@ -760,7 +760,7 @@ LISTA_STYLE_TABLE = {"overflowX": "auto"}
 LISTA_STYLE_CELL = {"textAlign": "left", "whiteSpace": "normal", "height": "auto", "minWidth": "120px", "maxWidth": "420px"}
 LISTA_STYLE_HEADER = {"fontWeight": "bold"}
 
-HEADER_H = "96px"
+HEADER_H = "104px"
 
 
 def dropdown_options_for_resp_col(col):
