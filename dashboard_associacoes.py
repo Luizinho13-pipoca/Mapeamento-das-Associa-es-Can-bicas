@@ -2,14 +2,24 @@
 import os
 import re
 import io
+import importlib.util
+from functools import lru_cache
 from pathlib import Path
 import unicodedata
 
 import pandas as pd
 import requests
+from requests.adapters import HTTPAdapter
 from dash import Dash, dcc, html, Input, Output, State, dash_table, no_update
 import plotly.express as px
 import plotly.graph_objects as go
+from urllib3.util.retry import Retry
+
+
+_http_session = requests.Session()
+_http_adapter = HTTPAdapter(max_retries=Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503]))
+_http_session.mount("https://", _http_adapter)
+_http_session.mount("http://", _http_adapter)
 
 
 # =========================================================
@@ -341,7 +351,7 @@ def load_table(source: str) -> pd.DataFrame:
     source = convert_drive_url(source)
 
     if is_url(source):
-        r = requests.get(source, timeout=60, headers=REQUEST_HEADERS)
+        r = _http_session.get(source, timeout=60, headers=REQUEST_HEADERS)
         r.raise_for_status()
         return read_bytes_as_table(r.content, source)
 
@@ -388,6 +398,30 @@ def norm_resp(x):
     return "NI"
 
 
+def norm_resp_vectorized(series: pd.Series) -> pd.Series:
+    s = (
+        series
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .str.replace(".", "", regex=False)
+        .str.replace(";", "", regex=False)
+        .str.replace(",", "", regex=False)
+    )
+    return pd.Series(
+        pd.NA,
+        index=series.index,
+        dtype="object"
+    ).mask(s.isin(SIM_VALS), "sim").mask(
+        s.isin(NAO_VALS), "não"
+    ).mask(
+        s.isin(NI_VALS | {"", "nan", "none"}), "NI"
+    ).mask(
+        s.isin(MP_VALS), "MP"
+    ).fillna("NI")
+
+
 def warn_unexpected_resp_values(d: pd.DataFrame, cols: list[str]):
     for col in cols:
         if col not in d.columns:
@@ -417,6 +451,12 @@ def is_found_link(x):
     if "não encontrado" in s or "nao encontrado" in s:
         return False
     return s.startswith("http")
+
+
+def is_found_link_vectorized(series: pd.Series) -> pd.Series:
+    s = series.fillna("").astype(str).str.strip().str.lower()
+    not_found = s.str.contains("não encontrado|nao encontrado", regex=True, na=False)
+    return s.str.startswith("http", na=False) & ~not_found
 
 
 def is_checked_service_value(x):
@@ -523,6 +563,18 @@ def strip_accents_lower(x: str) -> str:
     return strip_accents(x).lower()
 
 
+def strip_accents_fast(series: pd.Series) -> pd.Series:
+    return (
+        series
+        .fillna("")
+        .astype(str)
+        .str.normalize("NFKD")
+        .str.encode("ascii", errors="ignore")
+        .str.decode("ascii")
+        .str.lower()
+    )
+
+
 def norm_mun_name(x) -> str:
     if pd.isna(x):
         return ""
@@ -549,8 +601,6 @@ def make_md_link(url, label: str) -> str:
 # =========================================================
 # GEOJSON MUNICIPAL POR UF
 # =========================================================
-GEO_MUN_CACHE = {}
-
 UF_TO_GEOJS = {
     "AC":"12","AL":"27","AM":"13","AP":"16","BA":"29","CE":"23","DF":"53","ES":"32","GO":"52",
     "MA":"21","MG":"31","MS":"50","MT":"51","PA":"15","PB":"25","PE":"26","PI":"22","PR":"41",
@@ -558,20 +608,20 @@ UF_TO_GEOJS = {
 }
 
 
-def get_mun_geojson_for_uf(uf_sigla: str):
-    uf_sigla = (uf_sigla or "").upper().strip()
-    if uf_sigla in GEO_MUN_CACHE:
-        return GEO_MUN_CACHE[uf_sigla]
-
+@lru_cache(maxsize=27)
+def _fetch_mun_geojson(uf_sigla: str):
     code = UF_TO_GEOJS.get(uf_sigla)
     if not code:
         return None
 
     url = f"https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-{code}-mun.json"
+    return _http_session.get(url, timeout=30, headers=REQUEST_HEADERS).json()
+
+
+def get_mun_geojson_for_uf(uf_sigla: str):
+    uf_sigla = (uf_sigla or "").upper().strip()
     try:
-        gj = requests.get(url, timeout=30, headers=REQUEST_HEADERS).json()
-        GEO_MUN_CACHE[uf_sigla] = gj
-        return gj
+        return _fetch_mun_geojson(uf_sigla)
     except Exception as e:
         print(f"AVISO AO CARREGAR GEOJSON MUNICIPAL ({uf_sigla}): {repr(e)}")
         return None
@@ -594,8 +644,7 @@ def guess_prop_key(geojson: dict):
 # =========================================================
 # CARREGAMENTO DA BASE
 # =========================================================
-df_raw = load_table(DATA_SOURCE)
-df = df_raw.copy()
+df = load_table(DATA_SOURCE)
 df.columns = [normalize_colname(c) for c in df.columns]
 
 for maybe_idx in ["Unnamed: 0", "unnamed: 0"]:
@@ -695,18 +744,20 @@ else:
     df[COL_ASSOC_VERIF] = False
 df[COL_STATUS_VERIF] = df[COL_ASSOC_VERIF].map({True: "Verificada", False: "Não verificada"})
 
-warn_unexpected_resp_values(df, SERV_COLS + AUTORIZACAO_COLS)
+DEBUG = os.environ.get("DASH_DEBUG", "false").lower() == "true"
+if DEBUG:
+    warn_unexpected_resp_values(df, SERV_COLS + AUTORIZACAO_COLS)
 
 for c in SERV_COLS:
     if c in df.columns:
-        df[c] = df[c].apply(norm_resp)
+        df[c] = norm_resp_vectorized(df[c])
 
 for c in AUTORIZACAO_COLS:
     if c in df.columns:
-        df[c] = df[c].apply(norm_resp)
+        df[c] = norm_resp_vectorized(df[c])
 
-df[COL_TEM_IG] = df[COL_INSTAGRAM].apply(is_found_link) if COL_INSTAGRAM in df.columns else False
-df[COL_TEM_SITE] = df[COL_SITE].apply(is_found_link) if COL_SITE in df.columns else False
+df[COL_TEM_IG] = is_found_link_vectorized(df[COL_INSTAGRAM]) if COL_INSTAGRAM in df.columns else False
+df[COL_TEM_SITE] = is_found_link_vectorized(df[COL_SITE]) if COL_SITE in df.columns else False
 df[COL_TEM_CNPJ] = (
     safe_col(df, COL_CNPJ)
     .astype(str)
@@ -723,8 +774,9 @@ else:
     df["dt_fundacao_parsed"] = pd.NaT
     df[COL_ANO_FUND] = pd.NA
 
-df["_nome_norm"] = safe_col(df, COL_NOME).fillna("").astype(str).apply(strip_accents_lower)
-df["_sigla_norm"] = safe_col(df, COL_SIGLA).fillna("").astype(str).apply(strip_accents_lower)
+df["_nome_norm"] = strip_accents_fast(safe_col(df, COL_NOME))
+df["_sigla_norm"] = strip_accents_fast(safe_col(df, COL_SIGLA))
+df["_mun_norm"] = safe_col(df, COL_MUN).apply(norm_mun_name)
 
 
 # =========================================================
@@ -736,7 +788,7 @@ BRAZIL_STATES_GEOJSON_URL = (
     "public/data/brazil-states.geojson"
 )
 try:
-    BRAZIL_STATES_GEOJSON = requests.get(
+    BRAZIL_STATES_GEOJSON = _http_session.get(
         BRAZIL_STATES_GEOJSON_URL,
         timeout=30,
         headers=REQUEST_HEADERS
@@ -745,11 +797,25 @@ except Exception as e:
     print("ERRO AO CARREGAR GEOJSON DOS ESTADOS:", repr(e))
     BRAZIL_STATES_GEOJSON = {"type": "FeatureCollection", "features": []}
 
+_BASE_UFS_TEMPLATE = pd.DataFrame([
+    {
+        "uf_sigla": ft.get("properties", {}).get("sigla"),
+        "UF_nome": (
+            ft.get("properties", {}).get("name")
+            or ft.get("properties", {}).get("nome")
+            or ft.get("properties", {}).get("sigla")
+        )
+    }
+    for ft in BRAZIL_STATES_GEOJSON.get("features", [])
+    if ft.get("properties", {}).get("sigla")
+]).drop_duplicates(subset=["uf_sigla"])
+
 
 # =========================================================
 # APP
 # =========================================================
-app = Dash(__name__)
+HAS_FLASK_COMPRESS = importlib.util.find_spec("flask_compress") is not None
+app = Dash(__name__, compress=HAS_FLASK_COMPRESS)
 server = app.server
 app.title = "Dashboard — Associações Cannabicas"
 
@@ -1097,7 +1163,7 @@ app.layout = html.Div([
 ])
 
 
-def read_filtered_store(json_data):
+def read_filtered_store(json_data, copy=False):
     if not json_data:
         return df.iloc[0:0].copy()
     try:
@@ -1106,7 +1172,7 @@ def read_filtered_store(json_data):
         valid_indices = [idx for idx in json_data if idx in df.index]
         if not valid_indices:
             return df.iloc[0:0].copy()
-        return df.loc[valid_indices].copy()
+        return df.loc[valid_indices].copy() if copy else df.loc[valid_indices]
     except Exception as e:
         print("ERRO AO LER STORE FILTRADO:", repr(e))
         return df.iloc[0:0].copy()
@@ -1317,8 +1383,6 @@ def update_map(json_data, f_uf, busca_nome):
                 if not prop_key:
                     fig_mapa = blank_fig("Não consegui identificar o campo de nome do município no GeoJSON.")
                 else:
-                    d["_mun_norm"] = safe_col(d, COL_MUN).apply(norm_mun_name)
-
                     por_mun = (
                         d.groupby("_mun_norm")
                         .size()
@@ -1377,15 +1441,7 @@ def update_map(json_data, f_uf, busca_nome):
                 .dropna(subset=["uf_sigla"])
             )
 
-            todas_ufs = []
-            for ft in BRAZIL_STATES_GEOJSON.get("features", []):
-                props = ft.get("properties", {})
-                sigla = props.get("sigla")
-                nome = props.get("name") or props.get("nome") or sigla
-                if sigla:
-                    todas_ufs.append({"uf_sigla": sigla, "UF_nome": nome})
-
-            base_ufs = pd.DataFrame(todas_ufs).drop_duplicates(subset=["uf_sigla"])
+            base_ufs = _BASE_UFS_TEMPLATE.copy()
 
             if base_ufs.empty:
                 fig_mapa = blank_fig("Mapa de estados indisponível.")
@@ -1623,12 +1679,7 @@ def update_service_charts(json_data):
         try:
             if serv_col in d.columns:
                 serv_df = (
-                    d[serv_col]
-                    .fillna("NI")
-                    .astype(str)
-                    .str.strip()
-                    .replace("", "NI")
-                    .apply(norm_resp)
+                    norm_resp_vectorized(d[serv_col])
                     .loc[lambda s: s.isin(SERVICE_CATEGORY_ORDER)]
                     .value_counts()
                     .reindex(SERVICE_CATEGORY_ORDER, fill_value=0)
