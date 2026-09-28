@@ -817,7 +817,7 @@ _BASE_UFS_TEMPLATE = pd.DataFrame([
 HAS_FLASK_COMPRESS = importlib.util.find_spec("flask_compress") is not None
 app = Dash(__name__, compress=HAS_FLASK_COMPRESS)
 server = app.server
-app.title = "Dashboard — Associações Cannabicas"
+app.title = "Dashboard — Associações Canábicas"
 
 uf_opts = uniq_sorted(df[COL_UF]) if COL_UF in df.columns else []
 mun_opts = uniq_sorted(df[COL_MUN]) if COL_MUN in df.columns else []
@@ -849,7 +849,7 @@ app.layout = html.Div([
         html.Div([
 
             html.Div([
-                html.H1("Mapa das Associações Canabicas", className="brand-title"),
+                html.H1("Mapa das Associações Canábicas", className="brand-title"),
                 html.P("Fontes: dados Psicocult INCT-InEAC e Fiocruz", className="brand-subtitle")
             ], className="brand-text"),
 
