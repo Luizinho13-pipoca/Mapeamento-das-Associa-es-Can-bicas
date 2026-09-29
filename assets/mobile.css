@@ -1,0 +1,140 @@
+#mobile-filters-toggle {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .dashboard-shell {
+    padding-top: 52px;
+  }
+
+  #mobile-filters-toggle {
+    display: flex;
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 1100;
+    width: 100%;
+    height: 52px;
+    border-radius: 0;
+    margin: 0;
+    font-size: 16px;
+    gap: 12px;
+  }
+
+  #mobile-filters-toggle::after {
+    content: "+";
+    font-size: 24px;
+    width: 24px;
+  }
+
+  #mobile-filters-toggle[aria-expanded="true"]::after {
+    content: "\2212";
+  }
+
+  #mobile-filters-toggle:focus-visible {
+    outline: 3px solid #239777;
+    outline-offset: -5px;
+  }
+
+  .dashboard-shell .dashboard-body {
+    display: block !important;
+    height: auto !important;
+    min-width: 0;
+  }
+
+  #dashboard-filters {
+    display: none !important;
+  }
+
+  .filters-open #dashboard-filters {
+    display: flex !important;
+    position: fixed;
+    top: 52px;
+    bottom: 0;
+    left: 0;
+    z-index: 1050;
+    width: 100% !important;
+    height: calc(100vh - 52px) !important;
+    height: calc(100dvh - 52px) !important;
+    padding-bottom: max(16px, env(safe-area-inset-bottom)) !important;
+    background: #fff;
+    border: 0 !important;
+    overscroll-behavior: contain;
+  }
+
+  .filters-open #dashboard-filters > div:first-child {
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .filters-open .dashboard-main {
+    visibility: hidden;
+  }
+
+  body:has(.dashboard-shell.filters-open) {
+    overflow: hidden;
+  }
+
+  .dashboard-shell .dashboard-main {
+    min-width: 0;
+    width: 100%;
+    padding: 12px !important;
+    overflow: visible !important;
+  }
+
+  .dashboard-shell #kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .dashboard-shell .statistics-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .statistics-grid > div,
+  .dashboard-main .dash-graph,
+  .dashboard-main .tab-content,
+  .dashboard-main .dash-table-container {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .dashboard-shell .map-panel,
+  .dashboard-shell .map-panel .dash-graph,
+  .dashboard-shell .map-panel .js-plotly-plot,
+  .dashboard-shell .map-panel .plot-container,
+  .dashboard-shell .map-panel .svg-container {
+    min-height: 0;
+  }
+
+  .dashboard-shell #mapa {
+    height: 420px !important;
+    width: 100%;
+  }
+
+  .dashboard-main .dash-spreadsheet-container {
+    max-width: 100%;
+    overflow-x: auto !important;
+  }
+
+  .dashboard-shell .statistics-grid .modebar {
+    top: -8px !important;
+  }
+
+  /* Keep Plotly controls compact instead of inheriting full-size app buttons. */
+  .dashboard-shell .modebar-btn {
+    min-height: 0;
+    padding: 3px 4px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .dashboard-shell .brand-title {
+    font-size: 24px;
+  }
+
+  .dashboard-shell .tab {
+    padding: 12px 8px !important;
+  }
+}

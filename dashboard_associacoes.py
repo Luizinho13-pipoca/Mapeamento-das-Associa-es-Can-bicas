@@ -14,6 +14,7 @@ from dash import Dash, dcc, html, Input, Output, State, dash_table, no_update
 import plotly.express as px
 import plotly.graph_objects as go
 from urllib3.util.retry import Retry
+from estatisticas import association_key, build_association_registry, external_url, register_statistics
 
 
 _http_session = requests.Session()
@@ -679,6 +680,7 @@ if COL_ID_LONGA in df.columns and "ID" not in df.columns:
     df["ID"] = df[COL_ID_LONGA]
 
 # fallback leve para bases sem ID/Sigla
+HAS_SOURCE_IDS = COL_ID in df.columns
 if COL_ID not in df.columns:
     df[COL_ID] = range(1, len(df) + 1)
 
@@ -819,6 +821,31 @@ app = Dash(__name__, compress=HAS_FLASK_COMPRESS)
 server = app.server
 app.title = "Dashboard — Associações Canábicas"
 
+_stable_ids = df[COL_ID].notna() & ~df[COL_ID].duplicated(keep=False) & as_stripped(df[COL_ID]).ne("")
+df["_analytics_id"] = [
+    association_key("id", str(row[COL_ID]).strip())
+    if HAS_SOURCE_IDS and _stable_ids.loc[index]
+    else association_key("local", row[COL_NOME], row[COL_UF], row[COL_MUN])
+    for index, row in df.iterrows()
+]
+_analytics_keys, _statistics_associations = build_association_registry([
+    (row["_analytics_id"], {
+        "name": str(row[COL_NOME]),
+        "site": row.get(COL_SITE),
+        "instagram": row.get(COL_INSTAGRAM),
+    })
+    for _, row in df.iterrows()
+])
+df["_analytics_id"] = _analytics_keys
+register_statistics(server, _statistics_associations)
+
+
+def tracked_link(row, kind, label):
+    association = _statistics_associations.get(row["_analytics_id"], {})
+    if not external_url(association.get(kind)):
+        return ""
+    return f"[{label}](/saida/{row['_analytics_id']}/{kind})"
+
 uf_opts = uniq_sorted(df[COL_UF]) if COL_UF in df.columns else []
 mun_opts = uniq_sorted(df[COL_MUN]) if COL_MUN in df.columns else []
 
@@ -844,6 +871,10 @@ def auth_filter_style(col):
 
 app.layout = html.Div([
     dcc.Store(id="store-filtered-data"),
+    html.Button(
+        "Filtros e formulários", id="mobile-filters-toggle", n_clicks=0,
+        type="button", **{"aria-expanded": "false", "aria-controls": "dashboard-filters"},
+    ),
 
     html.Div([
         html.Div([
@@ -1031,7 +1062,7 @@ app.layout = html.Div([
 
             html.Div(style={"height": "4px"}),
 
-        ], style={
+        ], id="dashboard-filters", role="region", **{"aria-label": "Filtros e formulários"}, style={
             "width": "360px",
             "padding": "16px",
             "borderRight": "1px solid #eee",
@@ -1052,7 +1083,7 @@ app.layout = html.Div([
                     ),
                     html.Div(
                         dcc.Graph(
-                            id="mapa",
+                            id="mapa", responsive=True,
                             style={"height": "65vh", "backgroundColor": MAP_BG, "borderRadius": "12px"},
                             config={"displayModeBar": False}
                         ),
@@ -1108,27 +1139,27 @@ app.layout = html.Div([
 
                 dcc.Tab(label="Estatísticas", children=[
                     html.Div([
-                        html.Div(dcc.Graph(id="rank-mun"), style=GRAPH_CARD_STYLE),
-                        html.Div(dcc.Graph(id="linha-fundacao"), style=GRAPH_CARD_STYLE),
-                    ], style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "12px", "marginTop": "8px"}),
+                        html.Div(dcc.Graph(id="rank-mun", responsive=True), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="linha-fundacao", responsive=True), style=GRAPH_CARD_STYLE),
+                    ], className="statistics-grid", style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "12px", "marginTop": "8px"}),
 
                     html.Div([
-                        html.Div(dcc.Graph(id="rosca-cnpj"), style=GRAPH_CARD_STYLE),
-                        html.Div(dcc.Graph(id="rosca-presenca-digital"), style=GRAPH_CARD_STYLE),
-                    ], style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "12px", "marginTop": "12px"}),
+                        html.Div(dcc.Graph(id="rosca-cnpj", responsive=True), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-presenca-digital", responsive=True), style=GRAPH_CARD_STYLE),
+                    ], className="statistics-grid", style={"display": "grid", "gridTemplateColumns": "1fr 1fr", "gap": "12px", "marginTop": "12px"}),
 
                     html.H4("Serviços e produtos", style={"marginTop": "18px", "marginBottom": "8px", "color": PRIMARY_PURPLE}),
                     html.Div([
-                        html.Div(dcc.Graph(id="rosca-serv-0"), style=GRAPH_CARD_STYLE),
-                        html.Div(dcc.Graph(id="rosca-serv-1"), style=GRAPH_CARD_STYLE),
-                        html.Div(dcc.Graph(id="rosca-serv-2"), style=GRAPH_CARD_STYLE),
-                        html.Div(dcc.Graph(id="rosca-serv-3"), style=GRAPH_CARD_STYLE),
-                        html.Div(dcc.Graph(id="rosca-serv-4"), style=GRAPH_CARD_STYLE),
-                        html.Div(dcc.Graph(id="rosca-serv-5"), style=GRAPH_CARD_STYLE),
-                        html.Div(dcc.Graph(id="rosca-serv-6"), style=GRAPH_CARD_STYLE),
-                        html.Div(dcc.Graph(id="rosca-serv-7"), style=GRAPH_CARD_STYLE),
-                        html.Div(dcc.Graph(id="rosca-serv-8"), style=GRAPH_CARD_STYLE),
-                    ], style={"display": "grid", "gridTemplateColumns": "repeat(2, minmax(280px, 1fr))", "gap": "12px", "marginTop": "8px", "marginBottom": "12px"}),
+                        html.Div(dcc.Graph(id="rosca-serv-0", responsive=True), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-1", responsive=True), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-2", responsive=True), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-3", responsive=True), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-4", responsive=True), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-5", responsive=True), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-6", responsive=True), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-7", responsive=True), style=GRAPH_CARD_STYLE),
+                        html.Div(dcc.Graph(id="rosca-serv-8", responsive=True), style=GRAPH_CARD_STYLE),
+                    ], className="statistics-grid", style={"display": "grid", "gridTemplateColumns": "repeat(2, minmax(280px, 1fr))", "gap": "12px", "marginTop": "8px", "marginBottom": "12px"}),
                 ]),
 
                 dcc.Tab(label="Tabela", children=[
@@ -1147,20 +1178,32 @@ app.layout = html.Div([
                     )
                 ])
             ])
-        ], style={
+        ], className="dashboard-main", style={
             "flex": 1,
             "padding": "16px",
             "overflowY": "auto",
             "minHeight": 0
         }),
 
-    ], style={
+    ], className="dashboard-body", style={
         "display": "flex",
         "height": f"calc(100vh - {HEADER_H})",
         "minHeight": 0
     })
 
-])
+], id="dashboard-shell", className="dashboard-shell")
+
+
+app.clientside_callback(
+    """function(clicks) {
+        const expanded = Boolean(clicks % 2);
+        return [expanded ? "dashboard-shell filters-open" : "dashboard-shell",
+                expanded ? "true" : "false"];
+    }""",
+    Output("dashboard-shell", "className"),
+    Output("mobile-filters-toggle", "aria-expanded"),
+    Input("mobile-filters-toggle", "n_clicks"),
+)
 
 
 def read_filtered_store(json_data, copy=False):
@@ -1417,7 +1460,7 @@ def update_map(json_data, f_uf, busca_nome):
                             locations="mun_geo",
                             featureidkey=f"properties.{prop_key}",
                             color="n",
-                            title=f"Concentração de associações por município — {uf_sel}",
+                            title=f"Associações por município — {uf_sel}",
                             color_continuous_scale=PURPLE_SCALE,
                         )
 
@@ -1457,7 +1500,7 @@ def update_map(json_data, f_uf, busca_nome):
                     color="n",
                     hover_name="UF_nome",
                     custom_data=["uf_sigla"],
-                    title="Distribuição de associações por UF",
+                    title="Associações por UF",
                     color_continuous_scale=PURPLE_SCALE,
                 )
                 fig_mapa.update_traces(
@@ -1482,7 +1525,7 @@ def update_map(json_data, f_uf, busca_nome):
     try:
         d_list_source = apply_name_search(d, busca_nome)
         base_cols = [c for c in [COL_NOME, COL_SIGLA, COL_UF, COL_MUN, COL_STATUS_VERIF] if c in d_list_source.columns]
-        pull_cols = base_cols[:]
+        pull_cols = base_cols + ["_analytics_id"]
         if COL_INSTAGRAM in d_list_source.columns:
             pull_cols.append(COL_INSTAGRAM)
         if COL_SITE in d_list_source.columns:
@@ -1491,8 +1534,8 @@ def update_map(json_data, f_uf, busca_nome):
         d_list = d_list_source[pull_cols].copy() if pull_cols else pd.DataFrame()
 
         if not d_list.empty:
-            d_list["Instagram"] = d_list[COL_INSTAGRAM].apply(lambda x: make_md_link(x, "Instagram")) if COL_INSTAGRAM in d_list.columns else ""
-            d_list["Site"] = d_list[COL_SITE].apply(lambda x: make_md_link(x, "Site")) if COL_SITE in d_list.columns else ""
+            d_list["Instagram"] = d_list.apply(lambda row: tracked_link(row, "instagram", "Instagram"), axis=1)
+            d_list["Site"] = d_list.apply(lambda row: tracked_link(row, "site", "Site"), axis=1)
 
             show_cols = [c for c in [COL_NOME, COL_SIGLA, COL_UF, COL_MUN, "Instagram", "Site", COL_STATUS_VERIF] if c in d_list.columns]
             d_list = d_list[show_cols].copy()
@@ -1567,7 +1610,7 @@ def update_main_stats(json_data):
                 x="n",
                 y=COL_MUN,
                 orientation="h",
-                title="Top 20 municípios por número de associações",
+                title="Top 20 municípios<br>por número de associações",
                 color="n",
                 color_continuous_scale=CHART_PURPLE_SCALE,
                 text="n",
@@ -1606,7 +1649,7 @@ def update_main_stats(json_data):
                 x=COL_ANO_FUND,
                 y="n",
                 markers=True,
-                title="Linha do tempo das fundações por ano",
+                title="Fundações por ano",
             )
             fig_fund.update_traces(
                 line={"width": 3.5, "color": PRIMARY_PURPLE},

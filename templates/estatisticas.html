@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estat&iacute;sticas | Associa&ccedil;&otilde;es Can&aacute;bicas</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; color: #24342d; background: #fff; font: 16px system-ui, sans-serif; letter-spacing: 0; }
+  main { max-width: 1100px; margin: auto; padding: 24px; }
+  header, .filters, .metrics { display: flex; flex-wrap: wrap; align-items: end; gap: 20px; }
+  header { align-items: center; justify-content: space-between; border-bottom: 1px solid #dce2de; padding-bottom: 16px; }
+  h1 { font-size: 26px; margin: 8px 0; } h2 { font-size: 20px; margin-top: 32px; }
+  a { color: #5b0058; } button, .download { font: inherit; cursor: pointer; padding: 10px 16px; border: 1px solid #5b0058; border-radius: 4px; color: #fff; background: #5b0058; text-decoration: none; }
+  label { display: grid; gap: 6px; } input { font: inherit; padding: 9px; border: 1px solid #7c8780; border-radius: 4px; max-width: 100%; min-width: 0; }
+  .filters { margin: 24px 0; } .metrics { align-items: stretch; border-block: 1px solid #dce2de; padding: 20px 0; }
+  .metric { flex: 1 1 180px; } .metric strong { display: block; font-size: 32px; color: #206c51; }
+  .muted { color: #536159; font-size: 14px; line-height: 1.6; }
+  .table-scroll { overflow-x: auto; } table { border-collapse: collapse; width: 100%; }
+  th, td { padding: 12px 10px; text-align: left; border-bottom: 1px solid #dce2de; overflow-wrap: anywhere; }
+  th { background: #f2f6f3; } .number { text-align: right; font-variant-numeric: tabular-nums; }
+  meter { width: 100%; min-width: 65px; height: 18px; accent-color: #206c51; }
+  .login { max-width: 380px; margin: 48px auto; } .login button { margin-top: 20px; }
+  .error { color: #a22525; } button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid #247f64; outline-offset: 3px; }
+  @media (max-width: 540px) { main { padding: 16px; } h1 { font-size: 23px; } .filters label { width: 100%; } th, td { padding: 10px 6px; font-size: 14px; } }
+</style>
+<main>
+  <header>
+    <div><a href="/">Dashboard</a><h1>Estat&iacute;sticas de acesso</h1></div>
+    {% if mode == 'report' %}
+    <form method="post" action="{{ url_for('statistics.logout') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><button type="submit">Sair</button>
+    </form>
+    {% endif %}
+  </header>
+  {% if mode == 'unavailable' %}
+    <p>A consulta de estat&iacute;sticas ainda n&atilde;o est&aacute; dispon&iacute;vel.</p>
+  {% elif mode == 'login' %}
+    <form class="login" method="post" action="{{ url_for('statistics.login') }}">
+      <h2>Acesso restrito</h2>
+      {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Senha<input type="password" name="senha" required autocomplete="current-password" autofocus></label>
+      <button type="submit">Entrar</button>
+    </form>
+  {% elif mode == 'error' %}
+    <p class="error" role="alert">{{ error }}</p><a href="{{ url_for('statistics.index') }}">Voltar &agrave; consulta</a>
+  {% else %}
+    <form class="filters" method="get" action="{{ url_for('statistics.index') }}">
+      <label>De<input type="date" name="inicio" value="{{ start }}" required></label>
+      <label>At&eacute;<input type="date" name="fim" value="{{ end }}" required></label>
+      <button type="submit">Aplicar per&iacute;odo</button>
+      <a class="download" href="{{ url_for('statistics.export', inicio=start, fim=end) }}">Exportar CSV</a>
+    </form>
+    <p class="muted">{{ start.strftime('%d/%m/%Y') }} a {{ end.strftime('%d/%m/%Y') }} &middot; Hor&aacute;rio de Bras&iacute;lia (UTC&minus;3)</p>
+    <section class="metrics" aria-label="Resumo do periodo">
+      <div class="metric">Visitas totais no per&iacute;odo<strong>{{ totals.visits }}</strong></div>
+      <div class="metric">Navegadores distintos (estimativa)<strong>{{ totals.browsers }}</strong></div>
+      <div class="metric">Cliques em Site<strong>{{ clicks | sum(attribute='site') }}</strong></div>
+      <div class="metric">Cliques em Instagram<strong>{{ clicks | sum(attribute='instagram') }}</strong></div>
+    </section>
+    <p class="muted">Cada abertura ou recarga do dashboard conta como visita. A estimativa usa um cookie aleat&oacute;rio: apagar cookies, usar outro navegador ou bloquear cookies pode aumentar a contagem. N&atilde;o corresponde ao n&uacute;mero de pessoas.</p>
+    <h2>Visitas por dia</h2>
+    {% if not totals.visits %}<p>Nenhuma visita registrada neste per&iacute;odo.</p>{% endif %}
+    <div class="table-scroll"><table>
+      <thead><tr><th scope="col">Data</th><th scope="col">Volume de visitas</th><th class="number" scope="col">Visitas</th></tr></thead>
+      <tbody>{% for row in days %}<tr><td>{{ row.label }}</td><td><meter min="0" max="{{ max_visits }}" value="{{ row.visits }}" aria-label="Visitas em {{ row.label }}">{{ row.visits }}</meter></td><td class="number">{{ row.visits }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    <h2>Cliques por associa&ccedil;&atilde;o</h2>
+    {% if clicks %}
+    <div class="table-scroll"><table>
+      <thead><tr><th scope="col">Associa&ccedil;&atilde;o</th><th scope="col" class="number">Site</th><th scope="col" class="number">Instagram</th></tr></thead>
+      <tbody>{% for row in clicks %}<tr><td>{{ row.name }}</td><td class="number">{{ row.site }}</td><td class="number">{{ row.instagram }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% else %}<p>Nenhum clique registrado neste per&iacute;odo.</p>{% endif %}
+  {% endif %}
+</main>
+</html>
