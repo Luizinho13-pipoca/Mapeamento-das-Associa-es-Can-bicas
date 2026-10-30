@@ -505,14 +505,24 @@ def shorten_service_label(label: str) -> str:
 def service_filter_options():
     options = []
     seen = set()
+
     for col in SERV_COLS:
+        if col in {
+            "Possui algum outro produto para distribuição à base de cannabis? (sim, não ou NI)",
+            "Oferece algum outro tipo de serviço? (sim, não ou NI)",
+        }:
+            continue
+
         if col not in df.columns or col in seen:
             continue
+
         label = shorten_service_label(col)
         if strip_accents_lower(label) == "tambem":
             continue
+
         options.append({"label": label, "value": col})
         seen.add(col)
+
     return options
 
 
@@ -810,7 +820,7 @@ _BASE_UFS_TEMPLATE = pd.DataFrame([
     }
     for ft in BRAZIL_STATES_GEOJSON.get("features", [])
     if ft.get("properties", {}).get("sigla")
-]).drop_duplicates(subset=["uf_sigla"])
+], columns=["uf_sigla", "UF_nome"]).drop_duplicates(subset=["uf_sigla"])
 
 
 # =========================================================
@@ -880,7 +890,7 @@ app.layout = html.Div([
         html.Div([
 
             html.Div([
-                html.H1("Mapa Colaborativo Cannabis", className="brand-title")
+                html.H1("Mapa colaborativo das associações canábicas no Brasil", className="brand-title")
             ], className="brand-text"),
 
             html.Div([
