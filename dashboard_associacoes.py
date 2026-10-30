@@ -819,7 +819,7 @@ _BASE_UFS_TEMPLATE = pd.DataFrame([
 HAS_FLASK_COMPRESS = importlib.util.find_spec("flask_compress") is not None
 app = Dash(__name__, compress=HAS_FLASK_COMPRESS)
 server = app.server
-app.title = "Dashboard — Associações Canábicas"
+app.title = "Mapa Colaborativo Cannabis"
 
 _stable_ids = df[COL_ID].notna() & ~df[COL_ID].duplicated(keep=False) & as_stripped(df[COL_ID]).ne("")
 df["_analytics_id"] = [
@@ -880,8 +880,7 @@ app.layout = html.Div([
         html.Div([
 
             html.Div([
-                html.H1("Mapa das Associações Canábicas", className="brand-title"),
-                html.P("Fontes: dados Psicocult INCT-InEAC e Fiocruz", className="brand-subtitle")
+                html.H1("Mapa Colaborativo Cannabis", className="brand-title")
             ], className="brand-text"),
 
             html.Div([
